@@ -1,0 +1,128 @@
+---
+title: "Bonus Lesson: Where Do People End Up? (Detentions Data)"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: false
+    theme: cosmo
+execute:
+  warning: false
+  message: false
+---
+
+## Reporter Questions
+
+- **Where do people arrested in my area get sent after ICE takes them?**
+- **How long are they held before being released or deported?**
+- **Are detainees from my area being transferred to facilities far from their families and lawyers?**
+
+---
+
+## Overview
+
+The arrests and detainers data tells you *who* ICE arrested and *how*. The detentions data tells you *what happened next* — which facilities they were sent to, how long they were held, and how they were released.
+
+**Published example:** Capital News Service / The Daily Record: "MD immigrants detained by ICE find themselves far from home" (Dec. 31, 2025). Finding: Three out of four people detained in Maryland were eventually transferred to facilities in Louisiana or Texas.
+
+---
+
+## Setup
+
+The detentions data comes as a large parquet file from the DDP. Download it from [deportationdata.org/data/ice.html](https://deportationdata.org/data/ice.html) and put it in `data/raw/`.
+
+```{r setup}
+library(tidyverse)
+library(nanoparquet)   # install.packages("nanoparquet") if needed
+library(scales)
+
+MY_STATE <- "MARYLAND"
+MY_AOR   <- "Baltimore Area of Responsibility"
+MY_LABEL <- "Maryland"
+```
+
+---
+
+## Load the Detentions File
+
+Unlike the arrests files, the detentions data from DDP is already processed into a parquet file (a compressed data format that's faster than Excel for large files):
+
+```{r load-detentions, eval=FALSE}
+detentions <- read_parquet("data/raw/detention-stays-latest.parquet")
+glimpse(detentions)
+```
+
+---
+
+## Filter to Your Area
+
+The detentions data uses `book_in_aor` (the AOR where the person was first booked) to identify local cases:
+
+```{r filter-area, eval=FALSE}
+detentions_local <- detentions |>
+  filter(book_in_aor == MY_AOR)
+
+cat("Detentions from", MY_AOR, ":", nrow(detentions_local), "\n")
+```
+
+---
+
+## How Long Are People Held?
+
+Calculate detention length in days:
+
+```{r detention-length, eval=FALSE}
+detentions_local <- detentions_local |>
+  mutate(
+    days_held = as.numeric(difftime(
+      stay_book_out_date_time,
+      stay_book_in_date_time,
+      units = "days"
+    ))
+  )
+
+summary(detentions_local$days_held)
+```
+
+---
+
+## Where Do People Get Sent?
+
+The `detention_facility_last` column shows where the person was held at the end of their stay (or is currently held). Compare that to the `book_in_aor` to find out-of-state transfers:
+
+```{r transfer-analysis, eval=FALSE}
+# What states are people ending up in?
+detentions_local |>
+  count(state_of_detention_facility_last, sort = TRUE) |>
+  slice_head(n = 10)
+```
+
+---
+
+## Transfer Rate
+
+How many people ended up outside their home AOR?
+
+```{r transfer-rate, eval=FALSE}
+detentions_local |>
+  mutate(
+    transferred = detention_release_reason == "Transfer" |
+                  (book_in_aor != state_of_detention_facility_last)
+  ) |>
+  summarize(
+    total      = n(),
+    transferred = sum(transferred, na.rm = TRUE),
+    pct        = round(transferred / total * 100, 1)
+  )
+```
+
+---
+
+## Key Takeaways
+
+- The detentions data uses `book_in_aor` (not `state`) to identify local cases
+- `difftime()` calculates the number of days between two dates
+- `detention_release_reason == "Transfer"` identifies formal transfers
+- Three out of four Maryland detainees were transferred to Louisiana or Texas in 2025
+
+**For per-capita comparison:** If you want to compare transfer rates between states, use the same denominator (detentions per population or detentions per arrest) and note that the `book_in_aor` spans multiple states for some AORs.

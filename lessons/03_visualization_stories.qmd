@@ -1,0 +1,350 @@
+---
+title: "Lesson 3: Visualization and Story Hunting"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: false
+    theme: cosmo
+execute:
+  warning: false
+  message: false
+---
+
+## Reporter Questions
+
+- **Has ICE enforcement in my area spiked since the inauguration — and by how much?**
+- **What does the surge look like visually, month by month?**
+- **Are arrests in my area driven more by jail cooperation or by agents going into the community?**
+- **What's the one number that makes my local story worth publishing?**
+
+---
+
+## Overview
+
+Numbers tell you something. Charts let you see it — and let your editor see it. This lesson covers the basics of `ggplot2`, the R charting library, and ends with a story-hunting exercise using real published stories as models.
+
+---
+
+## Setup
+
+```{r setup}
+library(tidyverse)
+library(readxl)
+library(janitor)
+library(scales)      # for comma() and percent() in axis labels
+
+MY_STATE  <- "MARYLAND"
+MY_LABEL  <- "Maryland"     # used in chart titles
+```
+
+Re-run the loading and cleaning code:
+
+```{r load-data}
+load_arrests <- function(path) {
+  read_xlsx(path, skip = 6) |>
+    clean_names() |>
+    mutate(
+      across(where(is.character), ~ na_if(.x, "NA")),
+      apprehension_date = as_date(apprehension_date)
+    )
+}
+
+CUSTODIAL_METHODS <- c(
+  "Custodial Arrest", "CAP Local Incarceration", "CAP Federal Incarceration",
+  "CAP State Incarceration", "287(g) Program", "Probation and Parole",
+  "Law Enforcement Agency Response Unit", "Other Agency (turned over to INS)",
+  "Organized Crime Drug Enforcement Task Force", "Criminal Alien Program"
+)
+
+AT_LARGE_METHODS <- c(
+  "Non-Custodial Arrest", "Located", "ERO Reprocessed Arrest",
+  "Other efforts", "Other Task Force", "Worksite Enforcement", "Patrol Interior"
+)
+
+arrests_local <- bind_rows(
+  load_arrests("data/raw/2026-ICLI-00005_Arrests_FY24_20260311_Redacted.xlsx"),
+  load_arrests("data/raw/2026-ICLI-00005_Arrests_FY25_20260311_Redacted.xlsx"),
+  load_arrests("data/raw/2026-ICLI-00005_Arrests_FY26_20260311_Redacted.xlsx")
+) |>
+  distinct() |>
+  filter(state == MY_STATE) |>
+  mutate(
+    arrest_type = case_when(
+      apprehension_method %in% CUSTODIAL_METHODS ~ "Custodial",
+      apprehension_method %in% AT_LARGE_METHODS  ~ "Non-Custodial / At-Large",
+      TRUE                                        ~ "Border / Entry"
+    ),
+    criminality_label = case_when(
+      apprehension_criminality == "1 Convicted Criminal"         ~ "Convicted",
+      apprehension_criminality == "2 Pending Criminal Charges"   ~ "Pending Charges",
+      apprehension_criminality == "3 Other Immigration Violator" ~ "No Criminal Record",
+      TRUE ~ "Unknown"
+    )
+  )
+```
+
+---
+
+## Part A: Visualization
+
+### How ggplot2 Works
+
+Every `ggplot2` chart is built in layers:
+
+1. `ggplot(data, aes(x, y))` — what data and what goes on each axis
+2. `geom_*()` — what shape to draw (bars, lines, points)
+3. `labs()` — title, subtitle, axis labels, caption
+4. `theme_*()` — overall look
+
+Let's build a chart step by step.
+
+### Chart 1: Monthly Arrest Trend
+
+First, prepare the data — count arrests per month:
+
+```{r monthly-data}
+monthly_arrests <- arrests_local |>
+  mutate(month = floor_date(apprehension_date, "month")) |>
+  count(month)
+
+head(monthly_arrests)
+```
+
+Now build the chart:
+
+```{r monthly-chart}
+ggplot(monthly_arrests, aes(x = month, y = n)) +
+  geom_line(linewidth = 1, color = "#2c6fad") +
+  geom_point(size = 2, color = "#2c6fad") +
+  labs(
+    title = paste("ICE Arrests in", MY_LABEL, "by Month"),
+    subtitle = "FY2024–FY2026",
+    x = NULL,
+    y = "Arrests",
+    caption = "Source: DHS via Deportation Data Project (FOIA)"
+  ) +
+  scale_y_continuous(labels = comma) +
+  theme_minimal()
+```
+
+### Add the Inauguration Line
+
+Every chart in this analysis should mark January 20, 2025 — the day that enforcement priorities changed:
+
+```{r monthly-chart-inauguration}
+ggplot(monthly_arrests, aes(x = month, y = n)) +
+  geom_line(linewidth = 1, color = "#2c6fad") +
+  geom_point(size = 2, color = "#2c6fad") +
+  geom_vline(
+    xintercept = as.Date("2025-01-20"),
+    linetype = "dashed",
+    color = "gray40"
+  ) +
+  annotate(
+    "text",
+    x = as.Date("2025-01-20"),
+    y = max(monthly_arrests$n) * 0.95,
+    label = "Inauguration\nJan 20, 2025",
+    hjust = -0.05,
+    size = 3,
+    color = "gray40"
+  ) +
+  labs(
+    title = paste("ICE Arrests in", MY_LABEL, "by Month"),
+    subtitle = "FY2024–FY2026",
+    x = NULL,
+    y = "Arrests",
+    caption = "Source: DHS via Deportation Data Project (FOIA)"
+  ) +
+  scale_y_continuous(labels = comma) +
+  theme_minimal()
+```
+
+### Save the Chart
+
+```{r save-chart, eval=FALSE}
+ggsave("my_monthly_chart.png", width = 9, height = 5, dpi = 300)
+```
+
+### Chart 2: Custodial vs. Non-Custodial Over Time
+
+A stacked bar chart shows how the *composition* of arrests has shifted:
+
+```{r stacked-bar}
+monthly_by_type <- arrests_local |>
+  mutate(month = floor_date(apprehension_date, "month")) |>
+  count(month, arrest_type)
+
+ggplot(monthly_by_type, aes(x = month, y = n, fill = arrest_type)) +
+  geom_col() +
+  geom_vline(
+    xintercept = as.Date("2025-01-20"),
+    linetype = "dashed",
+    color = "white"
+  ) +
+  scale_fill_manual(values = c(
+    "Custodial"              = "#2c6fad",
+    "Non-Custodial / At-Large" = "#c94040",
+    "Border / Entry"         = "#888888"
+  )) +
+  labs(
+    title = paste("ICE Arrests in", MY_LABEL, "by Type"),
+    subtitle = "Dashed line = inauguration (Jan 20, 2025)",
+    x = NULL,
+    y = "Arrests",
+    fill = "Arrest Type",
+    caption = "Source: DHS via Deportation Data Project (FOIA)"
+  ) +
+  scale_y_continuous(labels = comma) +
+  theme_minimal()
+```
+
+### Chart 3: Criminality Breakdown
+
+```{r criminality-bar}
+criminality_summary <- arrests_local |>
+  count(criminality_label) |>
+  mutate(
+    pct = n / sum(n),
+    criminality_label = fct_reorder(criminality_label, n)
+  )
+
+ggplot(criminality_summary, aes(x = criminality_label, y = pct)) +
+  geom_col(fill = "#2c6fad") +
+  geom_text(
+    aes(label = percent(pct, accuracy = 1)),
+    hjust = -0.1,
+    size = 3.5
+  ) +
+  coord_flip() +
+  scale_y_continuous(labels = percent, limits = c(0, 0.7)) +
+  labs(
+    title = paste("Criminality of ICE Arrests in", MY_LABEL),
+    subtitle = "FY2024–FY2026",
+    x = NULL,
+    y = "Share of all arrests",
+    caption = "Source: DHS via Deportation Data Project (FOIA)"
+  ) +
+  theme_minimal()
+```
+
+---
+
+## Your Turn (Part A)
+
+1. Build the monthly trend chart for your state.
+2. Does it show a clear increase after January 20, 2025?
+3. What share of arrests were non-custodial? Build a chart showing the trend.
+
+---
+
+## Part B: Story Hunting
+
+Each of these angles has been published. Find the number in your data that makes a story for your coverage area.
+
+---
+
+### Story Angle 1: The Surge
+
+**Published:** Capital News Service: "Maryland's surprising role in implementing Trump's immigration agenda" (Nov. 13, 2025)
+**The number:** ICE arrested more than 2,000 people in Maryland communities in under a year — and 70% had no prior conviction.
+
+**Code starter:**
+
+```{r story-1}
+# Total arrests before and after inauguration
+inauguration <- as.Date("2025-01-20")
+
+arrests_local |>
+  mutate(era = if_else(apprehension_date >= inauguration, "Post-inauguration", "Pre-inauguration")) |>
+  count(era)
+```
+
+---
+
+### Story Angle 2: Who Is Being Arrested
+
+**Published:** Milwaukee Journal Sentinel: "ICE arrests of people without convictions grows sixfold in Wisconsin" (Apr. 16, 2026)
+**The number:** The share of non-criminal arrests spiked after January 2025.
+
+**Code starter:**
+
+```{r story-2}
+arrests_local |>
+  mutate(era = if_else(apprehension_date >= inauguration, "Post-inauguration", "Pre-inauguration")) |>
+  count(era, criminality_label) |>
+  group_by(era) |>
+  mutate(pct = round(n / sum(n) * 100, 1))
+```
+
+---
+
+### Story Angle 3: Local Police Cooperation
+
+**Published:** Capital News Service: "Ban on immigration partnership would make Maryland a target for ICE street arrests, Frederick County Sheriff says" (Dec. 19, 2025)
+**The number:** 119 people transferred from Maryland sheriffs' jails to ICE — a higher rate than most states.
+
+**Code starter:**
+
+```{r story-3, eval=FALSE}
+# You need the detainers data loaded — see Lesson 2
+# Which facilities declined the most?
+detainers_local |>
+  group_by(detainer_facility) |>
+  summarize(
+    total   = n(),
+    declined = sum(detainer_lift_reason == "Detainer Declined by LEA", na.rm = TRUE),
+    decline_rate = round(declined / total * 100, 1)
+  ) |>
+  arrange(desc(total)) |>
+  slice_head(n = 10)
+```
+
+---
+
+### Story Angle 4: Method Shift — Jail vs. Community
+
+**Published:** Block Club Chicago: ICE's Illinois arrests during Trump's crackdown (Dec. 2025)
+
+**Code starter:**
+
+```{r story-4}
+arrests_local |>
+  mutate(month = floor_date(apprehension_date, "month")) |>
+  count(month, arrest_type) |>
+  group_by(month) |>
+  mutate(pct = n / sum(n)) |>
+  filter(arrest_type == "Non-Custodial / At-Large") |>
+  ggplot(aes(x = month, y = pct)) +
+  geom_line(color = "#c94040", linewidth = 1) +
+  geom_vline(xintercept = as.Date("2025-01-20"), linetype = "dashed", color = "gray40") +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = paste("Share of Non-Custodial Arrests in", MY_LABEL),
+    x = NULL, y = "% of monthly arrests",
+    caption = "Source: DHS via Deportation Data Project (FOIA)"
+  ) +
+  theme_minimal()
+```
+
+---
+
+### Story Angle 5: Your Story
+
+Pick one angle. Run the code for your state. Write one sentence in this format:
+
+> ICE arrested **[NUMBER]** people in **[PLACE]** in **[TIME PERIOD]**, and **[KEY FINDING]** — compared to **[COMPARISON]** the year before.
+
+---
+
+## Key Takeaways
+
+- `ggplot(data, aes(x, y)) + geom_col()` — the basic bar chart
+- `geom_vline(xintercept = as.Date("2025-01-20"))` — add the inauguration line to any chart
+- `annotate("text", ...)` — add a label to a reference line
+- `floor_date(date, "month")` — round a date to the first of the month (for monthly totals)
+- `scale_y_continuous(labels = comma)` — readable axis numbers
+- `ggsave("chart.png", width = 9, height = 5)` — save for publication
+
+**Take home:** The `my_newsroom/` folder has a complete template — change `MY_STATE` and `MY_AOR` in `config.R`, then knit `analyze.qmd` for a full analysis of your area.

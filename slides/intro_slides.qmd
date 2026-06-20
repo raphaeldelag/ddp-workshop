@@ -1,0 +1,194 @@
+---
+title: "Finding Local Stories in ICE Arrest and Detainer Data"
+subtitle: "A Workshop on the Deportation Data Project"
+author: "Raphael Romero Ruiz"
+format:
+  revealjs:
+    theme: simple
+    slide-number: true
+    footer: "deportationdata.org • rromeror@umd.edu"
+    code-fold: false
+    incremental: false
+execute:
+  echo: false
+---
+
+## Before We Start {.center}
+
+**Pre-workshop survey:** What coverage area are you reporting on, and what questions do you most want to answer?
+
+[Survey link — add your Google Form URL here]
+
+Also: Is your data downloaded? Run `setup.R` if you haven't already.
+
+---
+
+## The Paper Trail {.center}
+
+Millions of records.
+One enforcement surge.
+Your story is in here.
+
+---
+
+## Where Does This Data Come From?
+
+**The Deportation Data Project** publishes internal U.S. government immigration enforcement data obtained through Freedom of Information Act litigation.
+
+The March 2026 release includes:
+
+- ICE arrests — **540,000+ records** across FY2023–FY2026
+- ICE detainers — who was asked to hold someone, and whether they complied
+- ICE detentions — where people were held and for how long
+- ICE encounters — pre-arrest contact events
+
+All obtained through a FOIA lawsuit — the same legal mechanism you use for local records.
+
+**Data source:** [deportationdata.org](https://deportationdata.org)
+
+---
+
+## Three Datasets — What Each Captures
+
+| Dataset | What it records | Key question |
+|---------|----------------|-------------|
+| **Arrests** | Every ICE arrest — who, where, how | How many arrests in my area? How? |
+| **Detainers** | ICE requests to local jails | Is my sheriff cooperating? |
+| **Detentions** | Where detainees are held | Where do people from my area end up? |
+
+Today we focus on **arrests and detainers** — the most actionable for local stories.
+
+---
+
+## The Enforcement Pipeline
+
+```
+Local jail holds someone
+        ↓
+ICE issues a detainer (request to hold)
+        ↓
+Jail says yes → ICE picks them up [Custodial Arrest]
+        ↓
+ICE processing facility (Baltimore, Salisbury...)
+        ↓
+Detention facility (often out of state)
+        ↓
+Immigration court → Deportation or Release
+```
+
+The **detainers file** lives at the second step.
+The **arrests file** covers both the custodial path and at-large community arrests.
+
+---
+
+## What the Data Does NOT Cover
+
+- **No CBP** — Customs and Border Protection (border crossings) is a separate agency with separate data
+- **No names** — all person identifiers are anonymized
+- **No real-time data** — the current release runs through March 10, 2026
+- **Some redacted fields** — certain facility details and case-level information are withheld
+
+This is still the most detailed public record ever produced on ICE interior enforcement.
+
+---
+
+## Custodial vs. Non-Custodial
+
+Two types of arrest — both in the same data file.
+
+::: {.columns}
+
+::: {.column width="50%"}
+**Custodial**
+ICE gets a call from a jail.
+Picks up someone already in custody.
+*Examples: 287(g) program, CAP*
+:::
+
+::: {.column width="50%"}
+**Non-Custodial (At-Large)**
+ICE finds someone in the community.
+No prior custody.
+*Examples: home raids, worksite enforcement, fugitive operations*
+:::
+
+:::
+
+In the FY24–FY26 data: **~285,000 custodial** / **~250,000 non-custodial**
+
+---
+
+## The July 2025 Change
+
+**Before July 2025:** ICE reported CAP program arrests separately — you could distinguish `CAP Local Incarceration`, `CAP Federal Incarceration`, and `287(g) Program`.
+
+**After July 2025:** ICE folded all CAP arrests into a single `"Custodial Arrest"` category.
+
+**What this means for you:**
+
+- ✅ Comparing custodial vs. non-custodial totals is fine across the full range
+- ⚠️ Comparing 287(g) vs. CAP specifically only works before July 2025
+
+This is your first **nerd box** moment — a methodology note your readers need.
+
+---
+
+## Stories Built From This Data
+
+**Capital News Service (Nov. 2025)**
+"Maryland's surprising role in implementing Trump's immigration agenda"
+→ 2,000+ arrests. 70% had no prior conviction.
+
+**Capital News Service (Dec. 2025)**
+"MD immigrants detained by ICE find themselves far from home"
+→ 3 in 4 Maryland detainees sent to Louisiana or Texas.
+
+**Milwaukee Journal Sentinel (Apr. 2026)**
+"ICE arrests of people without convictions grows sixfold in Wisconsin"
+→ The criminality breakdown, before and after inauguration.
+
+**New York Focus (Apr. 2026)**
+"Local Police in Westchester, Long Island Routinely Help ICE Make Arrests"
+→ Detainer compliance rate by agency.
+
+---
+
+## What You'll Build Today
+
+By the end of this workshop, you'll have:
+
+- Loaded and cleaned the full FY24–FY26 arrests and detainers data
+- Filtered it to your coverage area
+- Produced a monthly trend chart with the inauguration marker
+- Found your local detainer compliance rate
+- Identified one story angle with a publishable number
+
+And you'll take home the `my_newsroom/` template — change two lines of code, re-run, get your local analysis.
+
+---
+
+## Three Lessons, 50 Minutes Each
+
+| | Lesson | Key skill |
+|--|--------|----------|
+| 📂 | **Lesson 1: Loading & Cleaning** | `read_xlsx()`, `filter()`, `count()` |
+| 📊 | **Lesson 2: Summarizing & Joining** | `group_by()`, `summarize()`, `left_join()` |
+| 📈 | **Lesson 3: Visualization & Stories** | `ggplot2`, story hunting |
+
+10-minute break between Lessons 2 and 3.
+
+---
+
+## Before We Open RStudio
+
+Check:
+
+- [ ] R and RStudio installed
+- [ ] `ddp-workshop.Rproj` open (look for the project name in the upper-right corner)
+- [ ] FOIA files downloaded to `data/raw/`
+- [ ] `setup.R` run once
+
+If you're missing the data files, download them now:
+**deportationdata.org/data/ice.html** → 2026-ICLI-00005 release → Arrests FY24, FY25, FY26 + Detainers FY24, FY25, FY26
+
+Any questions before we start?

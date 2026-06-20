@@ -1,0 +1,240 @@
+---
+title: "ICE Arrests and Detainers — Local Analysis"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: true
+    theme: cosmo
+execute:
+  warning: false
+  message: false
+---
+
+```{r setup}
+library(tidyverse)
+library(readxl)
+library(janitor)
+library(scales)
+
+# Load your configuration and exclusions
+source("config.R")
+source("excluded_landmarks.R")
+```
+
+---
+
+## Load and Clean Data
+
+```{r load-arrests}
+load_arrests <- function(path) {
+  read_xlsx(path, skip = 6) |>
+    clean_names() |>
+    mutate(
+      across(where(is.character), ~ na_if(.x, "NA")),
+      apprehension_date = as_date(apprehension_date)
+    )
+}
+
+arrests_all <- bind_rows(
+  load_arrests(ARRESTS_FY24),
+  load_arrests(ARRESTS_FY25),
+  load_arrests(ARRESTS_FY26)
+) |>
+  distinct()
+```
+
+```{r filter-state}
+# Primary filter: state field
+# Fallback: AOR field (catches cases where state is blank but AOR is correct)
+arrests_local <- arrests_all |>
+  filter(
+    state == MY_STATE |
+    (is.na(state) & toa_current_duty_aor == MY_AOR)
+  ) |>
+  filter(
+    apprehension_date >= as.Date("2024-10-01"),
+    apprehension_date <= END_DATE
+  )
+
+cat(MY_LABEL, "arrests:", nrow(arrests_local), "\n")
+```
+
+```{r recode}
+CUSTODIAL_METHODS <- c(
+  "Custodial Arrest", "CAP Local Incarceration", "CAP Federal Incarceration",
+  "CAP State Incarceration", "287(g) Program", "Probation and Parole",
+  "Law Enforcement Agency Response Unit", "Other Agency (turned over to INS)",
+  "Organized Crime Drug Enforcement Task Force", "Criminal Alien Program"
+)
+
+AT_LARGE_METHODS <- c(
+  "Non-Custodial Arrest", "Located", "ERO Reprocessed Arrest",
+  "Other efforts", "Other Task Force", "Worksite Enforcement", "Patrol Interior"
+)
+
+arrests_local <- arrests_local |>
+  mutate(
+    arrest_type = case_when(
+      apprehension_method %in% CUSTODIAL_METHODS ~ "Custodial",
+      apprehension_method %in% AT_LARGE_METHODS  ~ "Non-Custodial / At-Large",
+      TRUE                                        ~ "Border / Entry"
+    ),
+    criminality_label = case_when(
+      apprehension_criminality == "1 Convicted Criminal"         ~ "Convicted",
+      apprehension_criminality == "2 Pending Criminal Charges"   ~ "Pending Charges",
+      apprehension_criminality == "3 Other Immigration Violator" ~ "No Criminal Record",
+      TRUE ~ "Unknown"
+    ),
+    era = if_else(
+      apprehension_date >= START_DATE,
+      paste("Post-inauguration\n(from", format(START_DATE, "%b %d, %Y"), ")"),
+      paste("Pre-inauguration\n(before", format(START_DATE, "%b %d, %Y"), ")")
+    )
+  )
+```
+
+---
+
+## Summary
+
+```{r summary-table}
+arrests_local |>
+  mutate(year = year(apprehension_date)) |>
+  count(year) |>
+  knitr::kable(col.names = c("Year", "Arrests"))
+```
+
+```{r type-table}
+arrests_local |>
+  count(arrest_type, sort = TRUE) |>
+  mutate(pct = percent(n / sum(n), accuracy = 0.1)) |>
+  knitr::kable(col.names = c("Arrest Type", "Count", "Share"))
+```
+
+```{r criminality-table}
+arrests_local |>
+  count(criminality_label, sort = TRUE) |>
+  mutate(pct = percent(n / sum(n), accuracy = 0.1)) |>
+  knitr::kable(col.names = c("Criminality", "Count", "Share"))
+```
+
+---
+
+## Monthly Trend
+
+```{r monthly-trend}
+monthly <- arrests_local |>
+  mutate(month = floor_date(apprehension_date, "month")) |>
+  count(month)
+
+ggplot(monthly, aes(x = month, y = n)) +
+  geom_line(linewidth = 1, color = "#2c6fad") +
+  geom_point(size = 2, color = "#2c6fad") +
+  geom_vline(
+    xintercept = START_DATE,
+    linetype = "dashed", color = "gray40"
+  ) +
+  annotate(
+    "text", x = START_DATE,
+    y = max(monthly$n) * 0.95,
+    label = paste("Inauguration\n", format(START_DATE, "%b %d, %Y")),
+    hjust = -0.05, size = 3, color = "gray40"
+  ) +
+  scale_y_continuous(labels = comma) +
+  labs(
+    title    = paste("ICE Arrests in", MY_LABEL, "by Month"),
+    subtitle = "FY2024–FY2026",
+    x = NULL, y = "Arrests",
+    caption  = "Source: DHS via Deportation Data Project (FOIA)"
+  ) +
+  theme_minimal()
+```
+
+---
+
+## Arrest Type Over Time
+
+```{r type-trend}
+monthly_type <- arrests_local |>
+  mutate(month = floor_date(apprehension_date, "month")) |>
+  count(month, arrest_type)
+
+ggplot(monthly_type, aes(x = month, y = n, fill = arrest_type)) +
+  geom_col() +
+  geom_vline(xintercept = START_DATE, linetype = "dashed", color = "white") +
+  scale_fill_manual(values = c(
+    "Custodial"               = "#2c6fad",
+    "Non-Custodial / At-Large"= "#c94040",
+    "Border / Entry"          = "#888888"
+  )) +
+  scale_y_continuous(labels = comma) +
+  labs(
+    title    = paste("ICE Arrests in", MY_LABEL, "by Type"),
+    subtitle = "Dashed line = inauguration",
+    x = NULL, y = "Arrests", fill = NULL,
+    caption  = "Source: DHS via Deportation Data Project (FOIA)"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+---
+
+## Top Facilities
+
+```{r top-facilities}
+arrests_local |>
+  filter(
+    !is.na(apprehension_site_landmark),
+    !str_detect(apprehension_site_landmark,
+                paste(ALL_EXCLUSIONS, collapse = "|"))
+  ) |>
+  count(apprehension_site_landmark, arrest_type, sort = TRUE) |>
+  slice_head(n = 15) |>
+  knitr::kable(col.names = c("Facility", "Type", "Arrests"))
+```
+
+---
+
+## Detainers
+
+```{r load-detainers}
+load_detainers <- function(path) {
+  read_xlsx(path, skip = 6) |>
+    clean_names() |>
+    mutate(
+      across(where(is.character), ~ na_if(.x, "NA")),
+      detainer_prepare_date = as_date(detainer_prepare_date)
+    )
+}
+
+detainers_local <- bind_rows(
+  load_detainers(DETAINERS_FY24),
+  load_detainers(DETAINERS_FY25),
+  load_detainers(DETAINERS_FY26)
+) |>
+  distinct() |>
+  filter(facility_state == MY_STATE)
+
+cat(MY_LABEL, "detainers:", nrow(detainers_local), "\n")
+```
+
+```{r detainer-compliance}
+detainers_local |>
+  group_by(detainer_facility) |>
+  summarize(
+    total    = n(),
+    declined = sum(detainer_lift_reason == "Detainer Declined by LEA", na.rm = TRUE),
+    decline_rate = percent(declined / total, accuracy = 0.1)
+  ) |>
+  arrange(desc(total)) |>
+  slice_head(n = 15) |>
+  knitr::kable(col.names = c("Facility", "Total Detainers", "Declined", "Decline Rate"))
+```
+
+---
+
+## Methodology
+
+Data comes from ICE arrest records obtained through a Freedom of Information Act lawsuit and compiled by the Deportation Data Project. It covers ICE arrests only — not Customs and Border Protection. `r MY_LABEL` figures reflect arrests in ICE's `r MY_AOR` filtered by state. Per-capita rates use Census Bureau 2024 estimates. Arrests from local jail cooperation programs (287(g) and CAP) are counted as custodial; community arrests are counted as non-custodial. After July 2025, ICE folded CAP program arrests into a single "Custodial Arrest" category, so pre- and post-July comparisons by method should be made carefully.

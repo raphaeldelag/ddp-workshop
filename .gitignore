@@ -1,0 +1,20 @@
+# R
+.Rhistory
+.RData
+.Rproj.user/
+*.Rcheck/
+
+# Raw FOIA data — too large to commit, download separately
+data/raw/*.xlsx
+data/raw/*.csv
+data/raw/*.parquet
+
+# Quarto render output
+_site/
+_book/
+*.html
+*_files/
+
+# OS
+.DS_Store
+Thumbs.db

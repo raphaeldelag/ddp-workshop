@@ -1,0 +1,214 @@
+---
+title: "Lesson 1: Loading and Cleaning ICE Arrest Data"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: false
+    theme: cosmo
+execute:
+  warning: false
+  message: false
+---
+
+## Reporter Questions
+
+Before we touch any code, here's what this lesson will help you answer:
+
+- **How many people did ICE arrest in my state?**
+- **What methods is ICE using — jail cooperation, or agents picking up people in the community?**
+- **How does this year compare to last year?**
+
+By the end of this lesson, you'll have a filtered dataset for your coverage area and a basic count of arrests by method.
+
+---
+
+## Overview
+
+The Deportation Data Project publishes ICE enforcement records obtained through a Freedom of Information Act lawsuit. The data comes as Excel files — large, messy, and formatted for government systems, not journalists. This lesson walks you through loading and cleaning one, then stacking three fiscal years together for a before/after comparison.
+
+**A note on the data:** These files contain both custodial arrests (ICE picks someone up from a jail) and non-custodial arrests (ICE picks someone up in the community). We'll learn to distinguish them in Lesson 2.
+
+---
+
+## Step 0: Setup
+
+Before anything else, make sure you're working inside the project. In RStudio, you should see `ddp-workshop` in the upper-right corner. If not, go to File → Open Project and select `ddp-workshop.Rproj`.
+
+Load the packages we need:
+
+```{r setup}
+library(tidyverse)   # filter, count, mutate, ggplot2, and more
+library(readxl)      # load Excel files
+library(janitor)     # clean column names
+```
+
+Set your state here. **This is the only line you need to change** to localize this analysis to your coverage area:
+
+```{r config}
+MY_STATE <- "MARYLAND"   # ALL CAPS, as it appears in the data
+```
+
+See `reference/aor_reference.md` for the full list of state names and their ICE Areas of Responsibility.
+
+---
+
+## Step 1: Load One Fiscal Year File
+
+The FY26 arrests file is a good starting point. Download it from [deportationdata.org/data/ice.html](https://deportationdata.org/data/ice.html) and put it in `data/raw/`.
+
+Open the file in Excel first. Notice that rows 1–6 are a preamble — metadata about the release, not actual data. The real column headers start on row 7. We tell R to skip those first 6 rows:
+
+```{r load-fy26}
+arrests_fy26_raw <- read_xlsx(
+  "data/raw/2026-ICLI-00005_Arrests_FY26_20260311_Redacted.xlsx",
+  skip = 6
+)
+```
+
+The column names loaded from Excel have spaces and capital letters — hard to work with in R. `clean_names()` converts them to lowercase with underscores:
+
+```{r clean-names}
+arrests_fy26_raw <- arrests_fy26_raw |> clean_names()
+
+# What columns do we have?
+glimpse(arrests_fy26_raw)
+```
+
+Use `head()` to see the first few rows:
+
+```{r preview}
+head(arrests_fy26_raw)
+```
+
+---
+
+## Step 2: Fix Common Data Issues
+
+**Blank cells become the string "NA"** — not a real R missing value. This happens because Excel exports blank cells as the text "NA". We need to convert them:
+
+```{r fix-na}
+arrests_fy26_raw <- arrests_fy26_raw |>
+  mutate(across(where(is.character), ~ na_if(.x, "NA")))
+```
+
+**Date columns** may have loaded as text. Convert them:
+
+```{r fix-dates}
+arrests_fy26_raw <- arrests_fy26_raw |>
+  mutate(apprehension_date = as_date(apprehension_date))
+```
+
+Check the result:
+
+```{r check-dates}
+class(arrests_fy26_raw$apprehension_date)
+range(arrests_fy26_raw$apprehension_date, na.rm = TRUE)
+```
+
+---
+
+## Step 3: Load All Three Fiscal Years
+
+One year of data gives you a snapshot. Three years give you a trend — and the ability to compare before and after the inauguration (January 20, 2025).
+
+Write a small function to load and clean one file, then apply it to all three:
+
+```{r load-function}
+load_arrests <- function(path) {
+  read_xlsx(path, skip = 6) |>
+    clean_names() |>
+    mutate(
+      across(where(is.character), ~ na_if(.x, "NA")),
+      apprehension_date = as_date(apprehension_date)
+    )
+}
+```
+
+```{r load-all}
+arrests_fy24 <- load_arrests("data/raw/2026-ICLI-00005_Arrests_FY24_20260311_Redacted.xlsx")
+arrests_fy25 <- load_arrests("data/raw/2026-ICLI-00005_Arrests_FY25_20260311_Redacted.xlsx")
+arrests_fy26 <- load_arrests("data/raw/2026-ICLI-00005_Arrests_FY26_20260311_Redacted.xlsx")
+
+# Stack them into one dataframe
+arrests_all <- bind_rows(arrests_fy24, arrests_fy25, arrests_fy26)
+
+cat("Total rows before deduplication:", nrow(arrests_all), "\n")
+```
+
+---
+
+## Step 4: Remove Duplicate Rows
+
+The FOIA data sometimes includes exact duplicate rows — same person, same date, same everything. Remove them:
+
+```{r dedup}
+arrests_all <- arrests_all |> distinct()
+
+cat("Total rows after deduplication:", nrow(arrests_all), "\n")
+```
+
+---
+
+## Step 5: Filter to Your State
+
+National ICE data covers hundreds of thousands of arrests. We only want the ones in our coverage area.
+
+The primary filter uses the `state` field:
+
+```{r filter-state}
+arrests_local <- arrests_all |>
+  filter(state == MY_STATE)
+
+cat("Arrests in", MY_STATE, ":", nrow(arrests_local), "\n")
+```
+
+> **Note:** Some records have a blank `state` field but are correctly assigned to your area via the `toa_current_duty_aor` field. The `my_newsroom/` template handles this with a more complete filter. For this lesson, filtering by state is enough to get started.
+
+---
+
+## Step 6: Your First Question — What Methods Are Being Used?
+
+`count()` is one of the most useful functions in R. It counts how many times each value appears in a column:
+
+```{r count-method}
+arrests_local |>
+  count(apprehension_method, sort = TRUE)
+```
+
+You should see a list of arrest methods ranked from most to least common.
+
+---
+
+## Your Turn
+
+Change `MY_STATE` at the top of this file to your coverage area and re-run the notebook.
+
+1. How many total arrests are in your area across FY24–FY26?
+2. What is the most common arrest method?
+3. How many rows were removed by the deduplication step?
+
+---
+
+## Key Takeaways
+
+- DDP Excel files have a 6-row preamble — always use `skip = 6`
+- `clean_names()` makes column names usable in R
+- `bind_rows()` stacks multiple files into one dataframe — essential for multi-year analysis
+- `distinct()` removes exact duplicate rows
+- `filter(state == MY_STATE)` localizes the national data to your coverage area
+- `count(column)` answers "how many of each thing?" — your most-used function
+
+**Key column names to remember:**
+
+| Column | What it contains |
+|--------|-----------------|
+| `apprehension_date` | Date of arrest |
+| `apprehension_method` | How the arrest was made |
+| `apprehension_criminality` | Criminal history at time of arrest |
+| `apprehension_site_landmark` | Facility or location |
+| `anonymized_identifier` | Anonymous person ID (links to detainers) |
+| `state` | State (ALL CAPS) |
+| `toa_current_duty_aor` | ICE Area of Responsibility |
+
+**In Lesson 2,** we'll summarize these arrests by method and criminality, and join them to the detainer data to find out which local agencies are cooperating with ICE.

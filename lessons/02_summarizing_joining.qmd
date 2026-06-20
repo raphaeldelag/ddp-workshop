@@ -1,0 +1,268 @@
+---
+title: "Lesson 2: Summarizing Arrests and Joining Detainers"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: false
+    theme: cosmo
+execute:
+  warning: false
+  message: false
+---
+
+## Reporter Questions
+
+- **Are most arrests in my area happening at jails, or are agents going out into the community?**
+- **What share of people arrested in my area had no criminal conviction?**
+- **Is my local sheriff or police department cooperating with ICE?**
+- **When ICE asks my county jail to hold someone, does the jail say yes?**
+
+---
+
+## Overview
+
+In Lesson 1, you loaded the arrests data and filtered it to your state. Now we'll summarize it — finding the top facilities, breaking down arrests by type, and connecting the arrests to detainer records to see which local agencies are cooperating with ICE.
+
+---
+
+## Setup
+
+```{r setup}
+library(tidyverse)
+library(readxl)
+library(janitor)
+
+MY_STATE <- "MARYLAND"   # change to your state
+```
+
+Re-run the loading code from Lesson 1 to get `arrests_local`. (In a real workflow, you'd save this to a file and load it here. For the workshop, re-running is fine.)
+
+```{r load-data}
+load_arrests <- function(path) {
+  read_xlsx(path, skip = 6) |>
+    clean_names() |>
+    mutate(
+      across(where(is.character), ~ na_if(.x, "NA")),
+      apprehension_date = as_date(apprehension_date)
+    )
+}
+
+arrests_local <- bind_rows(
+  load_arrests("data/raw/2026-ICLI-00005_Arrests_FY24_20260311_Redacted.xlsx"),
+  load_arrests("data/raw/2026-ICLI-00005_Arrests_FY25_20260311_Redacted.xlsx"),
+  load_arrests("data/raw/2026-ICLI-00005_Arrests_FY26_20260311_Redacted.xlsx")
+) |>
+  distinct() |>
+  filter(state == MY_STATE)
+```
+
+---
+
+## Part A: Summarizing Arrests
+
+### Custodial vs. Non-Custodial
+
+The `apprehension_method` column tells us how each arrest was made. Let's start by counting every value:
+
+```{r count-method}
+arrests_local |>
+  count(apprehension_method, sort = TRUE)
+```
+
+There are many values. For most stories, we want to collapse them into three buckets:
+
+- **Custodial** — ICE picks up someone already held at a jail or prison
+- **Non-Custodial / At-Large** — ICE arrests someone in the community (home, street, workplace)
+- **Border / Entry** — arrests at ports of entry or border crossings
+
+```{r recode-type}
+CUSTODIAL_METHODS <- c(
+  "Custodial Arrest",
+  "CAP Local Incarceration",
+  "CAP Federal Incarceration",
+  "CAP State Incarceration",
+  "287(g) Program",
+  "Probation and Parole",
+  "Law Enforcement Agency Response Unit",
+  "Other Agency (turned over to INS)",
+  "Organized Crime Drug Enforcement Task Force",
+  "Criminal Alien Program"
+)
+
+AT_LARGE_METHODS <- c(
+  "Non-Custodial Arrest",
+  "Located",
+  "ERO Reprocessed Arrest",
+  "Other efforts",
+  "Other Task Force",
+  "Worksite Enforcement",
+  "Patrol Interior"
+)
+
+arrests_local <- arrests_local |>
+  mutate(arrest_type = case_when(
+    apprehension_method %in% CUSTODIAL_METHODS ~ "Custodial",
+    apprehension_method %in% AT_LARGE_METHODS  ~ "Non-Custodial / At-Large",
+    TRUE                                        ~ "Border / Entry"
+  ))
+```
+
+Now count by the three buckets:
+
+```{r count-type}
+arrests_local |>
+  count(arrest_type, sort = TRUE) |>
+  mutate(pct = round(n / sum(n) * 100, 1))
+```
+
+> **Caveat:** After July 2025, ICE folded CAP program arrests into `"Custodial Arrest"`, so `CAP Local Incarceration` and similar categories are mostly absent in FY26 data. The custodial total is still accurate; the breakdown between CAP and 287(g) is only reliable before July 2025. See `reference/caveats.md`.
+
+---
+
+### Criminality Breakdown
+
+The `apprehension_criminality` column records whether the person had a prior conviction. Three values:
+
+```{r count-criminality}
+arrests_local |>
+  count(apprehension_criminality, sort = TRUE) |>
+  mutate(pct = round(n / sum(n) * 100, 1))
+```
+
+Rename the coded values to plain English:
+
+```{r recode-criminality}
+arrests_local <- arrests_local |>
+  mutate(criminality_label = case_when(
+    apprehension_criminality == "1 Convicted Criminal"       ~ "Convicted",
+    apprehension_criminality == "2 Pending Criminal Charges" ~ "Pending Charges",
+    apprehension_criminality == "3 Other Immigration Violator" ~ "No Criminal Record",
+    TRUE ~ "Unknown"
+  ))
+
+arrests_local |>
+  count(criminality_label, sort = TRUE) |>
+  mutate(pct = round(n / sum(n) * 100, 1))
+```
+
+---
+
+### Top Facilities
+
+Which jails and locations are ICE arresting the most people from?
+
+```{r top-facilities}
+arrests_local |>
+  filter(!is.na(apprehension_site_landmark)) |>
+  count(apprehension_site_landmark, sort = TRUE) |>
+  slice_head(n = 10)
+```
+
+> Some records use area codes like `"WCD GENERAL AREA"` or `"NON-SPECIFIC"` instead of a real facility name. These are real arrests but can't be mapped to a specific location. The `my_newsroom/` template excludes them from facility tables but counts them in state totals.
+
+---
+
+## Your Turn (Part A)
+
+1. What percentage of arrests in your state were non-custodial (at-large)?
+2. What share had no criminal conviction?
+3. What are the top 10 arrest locations?
+
+---
+
+## Part B: Joining Detainers
+
+A detainer is a request ICE sends to a local jail asking them to hold someone for pickup. When a jail refuses, the `detainer_lift_reason` field is recorded as `"Detainer Declined by LEA"`.
+
+### Load the Detainers File
+
+```{r load-detainers}
+load_detainers <- function(path) {
+  read_xlsx(path, skip = 6) |>
+    clean_names() |>
+    mutate(
+      across(where(is.character), ~ na_if(.x, "NA")),
+      detainer_prepare_date = as_date(detainer_prepare_date)
+    )
+}
+
+detainers_all <- bind_rows(
+  load_detainers("data/raw/2026-ICLI-00005_Detainers_FY24_20260311_Redacted.xlsx"),
+  load_detainers("data/raw/2026-ICLI-00005_Detainers_FY25_20260311_Redacted.xlsx"),
+  load_detainers("data/raw/2026-ICLI-00005_Detainers_FY26_20260311_Redacted.xlsx")
+) |>
+  distinct()
+```
+
+Filter detainers to your state:
+
+```{r filter-detainers}
+detainers_local <- detainers_all |>
+  filter(facility_state == MY_STATE)
+
+cat("Detainers in", MY_STATE, ":", nrow(detainers_local), "\n")
+```
+
+### What's in the Detainer Lift Reason Field?
+
+```{r count-lift-reason}
+detainers_local |>
+  count(detainer_lift_reason, sort = TRUE)
+```
+
+`NA` means the detainer is still active (no outcome yet). `"Booked into Detention"` means ICE successfully picked up the person. `"Detainer Declined by LEA"` means the jail refused.
+
+### Which Agencies Are Cooperating — and Which Are Refusing?
+
+```{r decline-rate}
+agency_summary <- detainers_local |>
+  group_by(detainer_facility) |>
+  summarize(
+    total_detainers = n(),
+    declined = sum(detainer_lift_reason == "Detainer Declined by LEA", na.rm = TRUE),
+    decline_rate = round(declined / total_detainers * 100, 1)
+  ) |>
+  arrange(desc(total_detainers)) |>
+  slice_head(n = 15)
+
+agency_summary
+```
+
+### Join Arrests to Detainers
+
+The `anonymized_identifier` column is an anonymous person ID that appears in both the arrests and detainers files. We can use it to link records:
+
+```{r join-arrests-detainers}
+arrests_with_detainers <- arrests_local |>
+  left_join(
+    detainers_local |>
+      select(anonymized_identifier, detainer_prepare_date,
+             detainer_facility, detainer_lift_reason),
+    by = "anonymized_identifier"
+  )
+
+cat("Rows after join:", nrow(arrests_with_detainers), "\n")
+```
+
+> **Why more rows than arrests?** A `left_join` creates one row for every matching combination. If a person has multiple detainers, they'll appear multiple times. In Lesson 2 we keep it simple. The `my_newsroom/` template uses a 180-day proximity window to keep only the most relevant detainer per arrest.
+
+---
+
+## Your Turn (Part B)
+
+1. What is the overall detainer decline rate in your state?
+2. Which facility had the most detainers? What was its decline rate?
+3. How many arrests in your state were linked to a detainer in the detainers file?
+
+---
+
+## Key Takeaways
+
+- `count()` + `mutate(pct = n / sum(n) * 100)` — count and calculate percentages in one step
+- `group_by()` + `summarize()` — aggregate by category (e.g., per facility)
+- `slice_head(n = 10)` — keep only the top N rows
+- `case_when()` — recode values; always end with `TRUE ~ "other"` as a catch-all
+- `left_join()` — link two tables on a shared column; keeps all rows from the left table
+
+**In Lesson 3,** we'll turn these numbers into charts and identify one story to pitch.
