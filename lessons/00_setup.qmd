@@ -1,0 +1,134 @@
+---
+title: "Setup: Getting Everything Ready"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: false
+    theme: cosmo
+execute:
+  warning: false
+  message: false
+  eval: false
+---
+
+## What We're Doing
+
+Before we can analyze any data, we need three things:
+
+1. This workshop's files on your computer
+2. R and RStudio installed and open
+3. The ICE arrest and detainer data downloaded
+
+Work through these steps now. Raise your hand if anything doesn't match what you see on the screen.
+
+---
+
+## Step 1: Get the Workshop Files
+
+Go to this URL in your browser:
+
+**github.com/[your-username]/ddp-workshop**
+
+You'll see a page that looks like a folder of files. You do not need a GitHub account.
+
+### If you've never used GitHub before — download the ZIP
+
+1. Click the green **Code** button near the top right
+2. Click **Download ZIP**
+3. Find the downloaded file (probably in your Downloads folder) and double-click it to unzip
+4. Move the unzipped folder somewhere you can find it — your Desktop or Documents is fine
+
+### If you're comfortable with git — clone it
+
+```bash
+git clone https://github.com/[your-username]/ddp-workshop.git
+```
+
+---
+
+## Step 2: Open the Project in RStudio
+
+This step matters. Opening the project file — not just any R script — sets the working directory correctly so all the file paths in the lessons will work.
+
+1. Open RStudio
+2. Go to **File → Open Project**
+3. Navigate to the `ddp-workshop` folder you just downloaded
+4. Double-click **`ddp-workshop.Rproj`**
+
+You'll know it worked when you see **`ddp-workshop`** in the upper-right corner of RStudio.
+
+::: {.callout-warning}
+If you just open RStudio without opening the project file, the lessons will fail when they try to load data. Always open via the `.Rproj` file.
+:::
+
+---
+
+## Step 3: Install Packages
+
+Packages are add-ons that give R new abilities — like reading Excel files or making charts. You only need to install them once.
+
+In the RStudio **Console** (bottom-left pane), paste this and press Enter:
+
+```{r}
+source("setup.R")
+```
+
+Wait for it to finish. You'll see a lot of text scrolling — that's normal. When it's done you'll see:
+
+```
+All packages installed. You're ready to go.
+```
+
+---
+
+## Step 4: Download the Data
+
+The workshop uses real ICE enforcement records obtained through a Freedom of Information Act lawsuit.
+
+1. Go to **deportationdata.org/data/ice.html**
+2. Find the **2026-ICLI-00005** release
+3. Download these six files:
+   - Arrests FY24, FY25, FY26
+   - Detainers FY24, FY25, FY26
+4. Put all six files in the **`data/raw/`** folder inside your `ddp-workshop` folder
+
+The files are large — around 80–200 MB each. If the download is slow, start it now and we'll move on.
+
+---
+
+## Step 5: Confirm Everything Works
+
+Run this chunk. If it prints a number greater than zero, you're ready.
+
+```{r}
+library(readxl)
+library(janitor)
+
+test <- read_xlsx(
+  "data/raw/2026-ICLI-00005_Arrests_FY26_20260311_Redacted.xlsx",
+  skip = 6,
+  n_max = 100
+) |> clean_names()
+
+cat("Rows loaded:", nrow(test), "\n")
+cat("Columns:", ncol(test), "\n")
+cat("\nYou're ready. Open lessons/01_r_basics_loading.qmd to begin.\n")
+```
+
+If you get an error that says `path does not exist`, the data file isn't in the right folder. Check that the `.xlsx` file is inside `data/raw/` and that the file name matches exactly.
+
+---
+
+## What Each Pane in RStudio Does
+
+If RStudio is new to you, here's a quick orientation:
+
+| Pane | Location | What it's for |
+|------|----------|--------------|
+| **Source** | Top-left | Where you write and read code |
+| **Console** | Bottom-left | Where code runs and output appears |
+| **Environment** | Top-right | Shows the data and variables you've created |
+| **Files / Plots** | Bottom-right | Browse files; see charts when you make them |
+
+During the workshop, you'll mostly work in the **Source** pane — reading through the lesson file and running chunks one at a time by pressing **Cmd+Enter** (Mac) or **Ctrl+Enter** (Windows).

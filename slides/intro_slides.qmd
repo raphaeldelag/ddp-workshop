@@ -6,20 +6,53 @@ format:
   revealjs:
     theme: simple
     slide-number: true
-    footer: "deportationdata.org • rromeror@umd.edu"
+    footer: "rromeror@umd.edu"
     code-fold: false
     incremental: false
 execute:
   echo: false
 ---
 
+## {data-background-color="#ffffff"}
+
+<div style="position:absolute;top:50%;right:-20px;width:52%;transform:translateY(-50%);overflow:hidden;">
+  <img id="beat-photo" src="images/1B9A0545.jpg"
+       style="width:100%;height:100%;object-fit:cover;">
+</div>
+
+<div style="position:absolute;top:20px;left:20px;width:43%;font-size:0.68em;line-height:1.65;">
+  <p style="font-size:1.6em;font-weight:700;margin-bottom:0.4em;">About Me</p>
+  <p>I'm a data reporter and graduate fellow at the Howard Center for Investigative Journalism at the University of Maryland.</p>
+  <p>I cover DHS — ICE, CBP, and the agencies carrying out the mass deportation mandate. Before this, four years at The Arizona Republic covering immigration, the borderlands, and Latine communities in Arizona.</p>
+  <p>The data we're working with today is the same data behind my reporting on Arizona's arrest surge and Maryland's 287(g) network.</p>
+</div>
+
+<script>
+(function() {
+  var imgs = ['1B9A0545.jpg','1B9A0625.jpg','1B9A1286.jpg','1B9A1561.jpg','1B9A1652.jpg','1B9A1675.jpg','1B9A1680.jpg','1B9A1713.jpg','1B9A1725.jpg','1B9A1783.jpg','1B9A1798.jpg','1B9A1843.jpg','1B9A1894.jpg','1B9A1998.jpg','1B9A2036.jpg','1B9A2080.jpg','1B9A2154.jpg','1B9A2245.jpg','1B9A2340.jpg','1B9A2624.jpg','1B9A2670.jpg','1B9A2719.jpg','1B9A2722.jpg','1B9A2769.jpg','1B9A2822.jpg','1B9A2875.jpg','1B9A2940.jpg','1B9A2948.jpg','1B9A3299.jpg','1B9A3522.jpg','1B9A3561.jpg','1B9A3609.jpg','R0005249.jpg','R0005974.jpg','R0006043.jpg','R0006310.jpg'];
+  for (var i = imgs.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = imgs[i]; imgs[i] = imgs[j]; imgs[j] = tmp;
+  }
+  var idx = 0;
+  var el = document.getElementById('beat-photo');
+  setInterval(function() {
+    idx = (idx + 1) % imgs.length;
+    el.src = 'images/' + imgs[idx];
+  }, 500);
+})();
+</script>
+
+
+---
+
 ## Before We Start {.center}
 
 **Pre-workshop survey:** What coverage area are you reporting on, and what questions do you most want to answer?
 
-[Survey link — add your Google Form URL here]
+[forms.gle/4eXaUxNv9JpdVgvi6](https://forms.gle/4eXaUxNv9JpdVgvi6)
 
-Also: Is your data downloaded? Run `setup.R` if you haven't already.
+![](images/survey_qr.png){width=200}
 
 ---
 
@@ -167,28 +200,25 @@ And you'll take home the `my_newsroom/` template — change two lines of code, r
 
 ---
 
-## Three Lessons, 50 Minutes Each
+## Today's Schedule
 
-| | Lesson | Key skill |
-|--|--------|----------|
-| 📂 | **Lesson 1: Loading & Cleaning** | `read_xlsx()`, `filter()`, `count()` |
-| 📊 | **Lesson 2: Summarizing & Joining** | `group_by()`, `summarize()`, `left_join()` |
-| 📈 | **Lesson 3: Visualization & Stories** | `ggplot2`, story hunting |
-
-10-minute break between Lessons 2 and 3.
+| | Block | Time | Key skill |
+|--|-------|------|----------|
+| ⚙️ | **Setup** | 15 min | Get files, install packages, load data |
+| 📂 | **Lesson 1: Loading & Cleaning** | 50 min | `read_xlsx()`, `filter()`, `count()` |
+| 📊 | **Lesson 2: Summarizing & Joining** | 50 min | `group_by()`, `summarize()`, `left_join()` |
+| ☕ | **Break** | 10 min | |
+| 📈 | **Lesson 3: Visualization & Stories** | 50 min | `ggplot2`, story hunting |
+| ❓ | **Q&A + Resources** | 15 min | Other datasets, next steps |
 
 ---
 
-## Before We Open RStudio
+## Let's Get Set Up
 
-Check:
+Open this file in RStudio:
 
-- [ ] R and RStudio installed
-- [ ] `ddp-workshop.Rproj` open (look for the project name in the upper-right corner)
-- [ ] FOIA files downloaded to `data/raw/`
-- [ ] `setup.R` run once
+**`lessons/00_setup.qmd`**
 
-If you're missing the data files, download them now:
-**deportationdata.org/data/ice.html** → 2026-ICLI-00005 release → Arrests FY24, FY25, FY26 + Detainers FY24, FY25, FY26
+We'll work through it together — getting the workshop files, installing packages, and confirming the data loads correctly before we start Lesson 1.
 
-Any questions before we start?
+Raise your hand if anything on your screen doesn't match mine.

@@ -15,6 +15,12 @@ _book/
 *.html
 *_files/
 
+# Instructor-only — not for public repo
+reference/instructor_code_guide.md
+
 # OS
 .DS_Store
 Thumbs.db
+
+/.quarto/
+**/*.quarto_ipynb

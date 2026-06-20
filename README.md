@@ -30,7 +30,7 @@ source("setup.R")
 ### 4. Optional: Pre-workshop survey
 
 Fill out the pre-workshop survey so the instructor can tailor examples to your coverage area:
-[Survey link — to be added]
+[forms.gle/4eXaUxNv9JpdVgvi6](https://forms.gle/4eXaUxNv9JpdVgvi6)
 
 ---
 

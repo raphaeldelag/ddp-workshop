@@ -83,23 +83,33 @@ head(arrests_fy26_raw)
 
 ---
 
-## Step 2: Fix Common Data Issues
+## Step 2: Fix One Column-Specific Data Issue
 
-**Blank cells become the string "NA"** — not a real R missing value. This happens because Excel exports blank cells as the text "NA". We need to convert them:
+Most columns in this dataset use real R `NA` values for missing data. But one column — `case_threat_level` — uses the literal text `"NA"` as a string instead. That means `is.na()` won't detect those values as missing, which matters if you ever filter or summarize by threat level.
+
+You can verify this:
+
+```{r check-na-issue}
+# real NA values
+sum(is.na(arrests_fy26_raw$case_threat_level))
+
+# string "NA" values
+sum(arrests_fy26_raw$case_threat_level == "NA", na.rm = TRUE)
+```
+
+Fix it by converting the string `"NA"` to a real `NA` across all text columns — it's a one-liner and costs nothing even for columns that don't need it:
 
 ```{r fix-na}
 arrests_fy26_raw <- arrests_fy26_raw |>
   mutate(across(where(is.character), ~ na_if(.x, "NA")))
 ```
 
-**Date columns** may have loaded as text. Convert them:
+**Dates load as timestamps, not plain dates.** `readxl` correctly reads the date column, but it includes a time component (`POSIXct`) — e.g., `"2026-03-10 23:59:36 UTC"`. For a day-level analysis, strip the time with `as_date()`:
 
 ```{r fix-dates}
 arrests_fy26_raw <- arrests_fy26_raw |>
   mutate(apprehension_date = as_date(apprehension_date))
 ```
-
-Check the result:
 
 ```{r check-dates}
 class(arrests_fy26_raw$apprehension_date)
@@ -150,20 +160,27 @@ cat("Total rows after deduplication:", nrow(arrests_all), "\n")
 
 ---
 
-## Step 5: Filter to Your State
+## Step 5: Filter to Your Coverage Area
 
 National ICE data covers hundreds of thousands of arrests. We only want the ones in our coverage area.
 
-The primary filter uses the `state` field:
+The primary filter uses the `state` field. But some records have a blank `state` and are instead assigned to an ICE Area of Responsibility (AOR). Without an AOR fallback, you'll miss those records entirely.
+
+The complete filter uses both:
 
 ```{r filter-state}
 arrests_local <- arrests_all |>
-  filter(state == MY_STATE)
+  filter(
+    state == MY_STATE |
+    (is.na(state) & toa_current_duty_aor == MY_AOR)
+  )
 
 cat("Arrests in", MY_STATE, ":", nrow(arrests_local), "\n")
 ```
 
-> **Note:** Some records have a blank `state` field but are correctly assigned to your area via the `toa_current_duty_aor` field. The `my_newsroom/` template handles this with a more complete filter. For this lesson, filtering by state is enough to get started.
+**When NOT to use the AOR fallback:** Some AORs cover multiple states. The Newark AOR, for example, covers both New Jersey and Delaware — if you're analyzing New Jersey and filter by AOR, you'll pull Delaware records too. In that case, filter by `state` only and skip the AOR line.
+
+Check `reference/aor_reference.md` to see which states your AOR covers before deciding.
 
 ---
 
