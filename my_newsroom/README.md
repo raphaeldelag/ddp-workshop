@@ -44,9 +44,24 @@ The output is a self-contained HTML file with:
 
 **Exclude local facilities:** Edit `excluded_landmarks.R` to add facility names from your area that should be removed from the facility table (e.g., facilities in a neighboring state that appear due to AOR overlap).
 
-**Adjust the date range:** Change `START_DATE` and `END_DATE` in `config.R`.
+**Adjust the date range:** The template uses the full FY2024 to FY2026 range. `END_DATE` in `config.R` sets the upper bound (default is today's date). To stop at a fixed date, set it to something like `as.Date("2026-03-10")`.
 
 **Add more analyses:** The workshop lessons (`../lessons/`) show how to build additional charts and analyses — copy the code you want into `analyze.qmd`.
+
+---
+
+## How the Time Periods Work
+
+The analysis groups arrests into **administration years** anchored on the January 20 inauguration anniversary, rather than calendar or fiscal years, so each period lines up with the change in enforcement policy and is directly comparable:
+
+- **Biden, late 2023 (partial)** — Oct 1, 2023 to Jan 19, 2024
+- **Biden's last year** — Jan 20, 2024 to Jan 19, 2025
+- **Trump's first year** — Jan 20, 2025 to Jan 19, 2026
+- **Trump's second year (so far)** — Jan 20, 2026 onward
+
+The first and last periods are **partial windows**, because the data starts in October 2023 and ends partway through Trump's second year. Their raw totals are not full-year figures, so don't compare them head-to-head with a full year.
+
+That is what the **"Same time last year"** table handles. It trims every administration year to the same number of days that have elapsed in the current (partial) one, measured from each January 20. So if the latest data runs eight months into Trump's second year, the table compares the first eight months of each year. That is the apples-to-apples "compared to the same time last year" number, and the one safest to publish.
 
 ---
 

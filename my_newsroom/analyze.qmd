@@ -55,10 +55,9 @@ arrests_local <- arrests_all |>
     state == MY_STATE |
     (is.na(state) & toa_current_duty_aor == MY_AOR)
   ) |>
-  filter(
-    apprehension_date >= as.Date("2024-10-01"),
-    apprehension_date <= END_DATE
-  )
+  # Keep the full FY24–FY26 range. We slice it into administration years
+  # below; the lower bound is the start of the data, not a fixed date.
+  filter(apprehension_date <= END_DATE)
 
 cat(MY_LABEL, "arrests:", nrow(arrests_local), "\n")
 ```
@@ -89,23 +88,76 @@ arrests_local <- arrests_local |>
       apprehension_criminality == "3 Other Immigration Violator" ~ "No Criminal Record",
       TRUE ~ "Unknown"
     ),
-    era = if_else(
-      apprehension_date >= START_DATE,
-      paste("Post-inauguration\n(from", format(START_DATE, "%b %d, %Y"), ")"),
-      paste("Pre-inauguration\n(before", format(START_DATE, "%b %d, %Y"), ")")
+    # Administration years, anchored on the Jan 20 inauguration anniversary
+    # so each period is directly comparable. Most-recent first in case_when.
+    admin_period = case_when(
+      apprehension_date >= as.Date("2026-01-20") ~ "Trump's second year (so far)",
+      apprehension_date >= as.Date("2025-01-20") ~ "Trump's first year",
+      apprehension_date >= as.Date("2024-01-20") ~ "Biden's last year",
+      TRUE                                       ~ "Biden, late 2023 (partial)"
     )
-  )
+  ) |>
+  mutate(admin_period = factor(admin_period, levels = c(
+    "Biden, late 2023 (partial)",
+    "Biden's last year",
+    "Trump's first year",
+    "Trump's second year (so far)"
+  )))
 ```
 
 ---
 
 ## Summary
 
+Total arrests in each administration year. Note that the first and last
+periods are partial windows (the data starts in October 2023 and ends
+partway through Trump's second year), so compare the two full years to
+each other, or use the "same time last year" table below.
+
 ```{r summary-table}
 arrests_local |>
-  mutate(year = year(apprehension_date)) |>
-  count(year) |>
-  knitr::kable(col.names = c("Year", "Arrests"))
+  count(admin_period, .drop = FALSE) |>
+  mutate(pct = percent(n / sum(n), accuracy = 0.1)) |>
+  knitr::kable(col.names = c("Administration period", "Arrests", "Share"))
+```
+
+### Same Time Last Year
+
+The most recent administration year is only partial, so comparing its raw
+total to a full prior year would understate it. To compare fairly, we trim
+every administration year to the **same number of days** that have elapsed
+in the current one, measured from each January 20 anniversary.
+
+```{r yoy-window}
+# How far into the current administration year does the data reach?
+data_through  <- max(arrests_local$apprehension_date, na.rm = TRUE)
+anniversaries <- as.Date(c("2024-01-20", "2025-01-20", "2026-01-20"))
+current_anniv <- max(anniversaries[anniversaries <= data_through])
+elapsed_days  <- as.integer(data_through - current_anniv)
+
+# Flag arrests that fall in the same elapsed-day window of their own year.
+# findInterval returns 0 for late-2023 records (before the first
+# anniversary); map those to NA so they drop out cleanly.
+arrests_same_window <- arrests_local |>
+  mutate(
+    anniv_idx    = findInterval(apprehension_date, anniversaries),
+    period_start = if_else(anniv_idx == 0, as.Date(NA), anniversaries[pmax(anniv_idx, 1)])
+  ) |>
+  filter(!is.na(period_start),
+         as.integer(apprehension_date - period_start) <= elapsed_days)
+
+cat("Comparing the first", elapsed_days, "days of each administration year",
+    "(through", format(data_through, "%b %d"), ")\n")
+
+arrests_same_window |>
+  count(admin_period, .drop = FALSE) |>
+  filter(n > 0) |>
+  mutate(
+    vs_prior = n - lag(n),
+    pct_change = percent((n - lag(n)) / lag(n), accuracy = 0.1)
+  ) |>
+  knitr::kable(col.names = c("Administration period", "Arrests (same window)",
+                             "Change vs. prior year", "% change"))
 ```
 
 ```{r type-table}
@@ -240,4 +292,6 @@ detainers_local |>
 
 ## Methodology
 
-Data comes from ICE arrest records obtained through a Freedom of Information Act lawsuit and compiled by the Deportation Data Project. It covers ICE arrests only — not Customs and Border Protection. `r MY_LABEL` figures reflect arrests in ICE's `r MY_AOR` filtered by state. Per-capita rates use Census Bureau 2024 estimates. Arrests from local jail cooperation programs (287(g) and CAP) are counted as custodial; community arrests are counted as non-custodial. After July 2025, ICE folded CAP program arrests into a single "Custodial Arrest" category, so pre- and post-July comparisons by method should be made carefully.
+Data comes from ICE arrest records obtained through a Freedom of Information Act lawsuit and compiled by the Deportation Data Project. It covers ICE arrests only — not Customs and Border Protection. `r MY_LABEL` figures reflect arrests in ICE's `r MY_AOR` filtered by state, across the full FY2024 to FY2026 range. Per-capita rates use Census Bureau 2024 estimates. Arrests from local jail cooperation programs (287(g) and CAP) are counted as custodial; community arrests are counted as non-custodial. After July 2025, ICE folded CAP program arrests into a single "Custodial Arrest" category, so pre- and post-July comparisons by method should be made carefully.
+
+Arrests are grouped into administration years anchored on the January 20 inauguration anniversary, rather than calendar or fiscal years, so each period is directly comparable. The data begins in October 2023, so "Biden, late 2023" is a partial window, and the data ends partway through "Trump's second year," which is also partial. Raw totals for those two periods are not full-year figures. The "same time last year" comparison addresses this by trimming every administration year to the same number of elapsed days, measured from each January 20, so the most recent partial year is compared only against the matching window of earlier years.
