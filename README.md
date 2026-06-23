@@ -38,7 +38,6 @@ Fill out the pre-workshop survey so the instructor can tailor examples to your c
 
 | Block | File | Time |
 |-------|------|------|
-| Intro slides | `slides/intro_slides.qmd` | 15–20 min |
 | Lesson 1: Loading & Cleaning | `lessons/01_r_basics_loading.qmd` | 50 min |
 | Lesson 2: Summarizing & Joining | `lessons/02_summarizing_joining.qmd` | 50 min |
 | Break | — | 10 min |
