@@ -47,6 +47,7 @@ Set your state here. **This is the only line you need to change** to localize th
 
 ```{r config}
 MY_STATE <- "MARYLAND"   # ALL CAPS, as it appears in the data
+MY_AOR <- "Baltimore Area of Responsibility"
 ```
 
 See `reference/aor_reference.md` for the full list of state names and their ICE Areas of Responsibility.
