@@ -17,9 +17,11 @@ library(readxl)
 library(janitor)
 library(scales)
 
-# Load your configuration and exclusions
-source("config.R")
-source("excluded_landmarks.R")
+# Load your configuration and exclusions.
+# Paths are relative to the project root because _quarto.yml sets
+# execute-dir: project (so data/raw/ paths in config.R resolve too).
+source("my_newsroom/config.R")
+source("my_newsroom/excluded_landmarks.R")
 ```
 
 ---
