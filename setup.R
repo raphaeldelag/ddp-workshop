@@ -8,14 +8,14 @@
 options(repos = c(CRAN = "https://cloud.r-project.org"))
 
 # The convenience meta-packages we install.
-to_install <- c("tidyverse", "readxl", "janitor", "scales")
+to_install <- c("tidyverse", "readxl", "janitor", "scales", "here")
 
 # The packages the lessons actually load. tidyverse is a bundle, so we
 # check its members individually — that's where partial installs hide.
 to_verify <- c(
   "dplyr", "ggplot2", "readr", "tibble", "tidyr",
   "lubridate", "forcats", "stringr",
-  "readxl", "janitor", "scales"
+  "readxl", "janitor", "scales", "here"
 )
 
 # Install only the meta-packages that aren't already present.

@@ -16,12 +16,13 @@ library(tidyverse)
 library(readxl)
 library(janitor)
 library(scales)
+library(here)        # resolves paths from the project root, however you run this
 
-# Load your configuration and exclusions.
-# Paths are relative to the project root because _quarto.yml sets
-# execute-dir: project (so data/raw/ paths in config.R resolve too).
-source("my_newsroom/config.R")
-source("my_newsroom/excluded_landmarks.R")
+# Load your configuration and exclusions. here() anchors to the project
+# root (the folder with the .Rproj file), so these work whether you knit
+# the file or run the chunks interactively in RStudio.
+source(here("my_newsroom", "config.R"))
+source(here("my_newsroom", "excluded_landmarks.R"))
 ```
 
 ---
@@ -30,7 +31,7 @@ source("my_newsroom/excluded_landmarks.R")
 
 ```{r load-arrests}
 load_arrests <- function(path) {
-  read_xlsx(path, skip = 6) |>
+  read_xlsx(here(path), skip = 6) |>
     clean_names() |>
     mutate(
       across(where(is.character), ~ na_if(.x, "NA")),
@@ -203,7 +204,7 @@ arrests_local |>
 
 ```{r load-detainers}
 load_detainers <- function(path) {
-  read_xlsx(path, skip = 6) |>
+  read_xlsx(here(path), skip = 6) |>
     clean_names() |>
     mutate(
       across(where(is.character), ~ na_if(.x, "NA")),
