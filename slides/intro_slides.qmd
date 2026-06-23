@@ -9,6 +9,9 @@ format:
     footer: "rromeror@umd.edu"
     code-fold: false
     incremental: false
+    width: 1050
+    height: 700
+    css: styles.css
 execute:
   echo: false
 ---
