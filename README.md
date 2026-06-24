@@ -19,6 +19,8 @@ Go to [deportationdata.org/data/ice.html](https://deportationdata.org/data/ice.h
 
 Put all six files in the `data/raw/` folder in this project.
 
+For the optional bonus lesson (`04_detentions_bonus.qmd`), also download the **detention stays** parquet from the same page and put it in `data/processed/` — it's a cleaned, derived file rather than a raw FOIA release.
+
 ### 3. Install R packages
 
 Open `ddp-workshop.Rproj` in RStudio, then run:
@@ -52,7 +54,7 @@ Optional bonus: `lessons/04_detentions_bonus.qmd`
 
 The `my_newsroom/` folder is a template you can use back at your newsroom:
 
-1. Edit `my_newsroom/config.R` — change `MY_STATE` and `MY_AOR` to your coverage area
+1. Edit `my_newsroom/config.R` — set `MY_STATE`, `MY_AOR`, and `MY_FILTER_MODE` for your coverage area, or copy one of the saved jurisdiction presets (MD, NYC, AZ, WI, IL, LA) listed in the file
 2. Download the full FOIA data into `data/raw/`
 3. Open and knit `my_newsroom/analyze.qmd`
 
