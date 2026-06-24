@@ -9,6 +9,10 @@ data/raw/*.xlsx
 data/raw/*.csv
 data/raw/*.parquet
 
+# Processed/derived data (e.g. DDP detention parquet) — also too large to commit
+data/processed/*.parquet
+data/processed/*.csv
+
 # Quarto render output
 _site/
 _book/

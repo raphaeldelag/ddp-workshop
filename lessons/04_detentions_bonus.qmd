@@ -29,7 +29,7 @@ The arrests and detainers data tells you *who* ICE arrested and *how*. The deten
 
 ## Setup
 
-The detentions data comes as a large parquet file from the DDP. Download it from [deportationdata.org/data/ice.html](https://deportationdata.org/data/ice.html) and put it in `data/raw/`.
+The detentions data comes as a large parquet file from the DDP. Download it from [deportationdata.org/data/ice.html](https://deportationdata.org/data/ice.html) and put it in `data/processed/` (it's already a cleaned, derived file, not a raw FOIA release).
 
 ```{r setup}
 library(tidyverse)
@@ -48,7 +48,7 @@ MY_LABEL <- "Maryland"
 Unlike the arrests files, the detentions data from DDP is already processed into a parquet file (a compressed data format that's faster than Excel for large files):
 
 ```{r load-detentions, eval=FALSE}
-detentions <- read_parquet("data/raw/detention-stays-latest.parquet")
+detentions <- read_parquet("data/processed/detention-stays-latest.parquet")
 glimpse(detentions)
 ```
 
@@ -56,20 +56,30 @@ glimpse(detentions)
 
 ## Filter to Your Area
 
-The detentions data uses `book_in_aor` (the AOR where the person was first booked) to identify local cases:
+`book_in_aor` is the AOR where a person was booked into detention. But there's a catch that matters for the transfer story: this file is one row per **stay**, and a stay ends when someone changes status or facility. When ICE books a person in Baltimore and later moves them to Louisiana, that's recorded as **two separate stays** with two different `book_in_aor` values — so filtering to a single AOR throws away the very transfers you're trying to find.
+
+To follow people, first get everyone who was ever booked in your area, then pull *all* of their stays:
 
 ```{r filter-area, eval=FALSE}
-detentions_local <- detentions |>
-  filter(book_in_aor == MY_AOR)
+# Everyone booked into detention in your area at any point
+local_ids <- detentions |>
+  filter(book_in_aor == MY_AOR) |>
+  distinct(unique_identifier) |>
+  pull(unique_identifier)
 
-cat("Detentions from", MY_AOR, ":", nrow(detentions_local), "\n")
+# Every stay belonging to those people, so we can see where they went next
+detentions_local <- detentions |>
+  filter(unique_identifier %in% local_ids)
+
+cat(MY_LABEL, "detainees:", length(local_ids),
+    "people across", nrow(detentions_local), "stays\n")
 ```
 
 ---
 
 ## How Long Are People Held?
 
-Calculate detention length in days:
+Each stay has a book-in and book-out timestamp. Subtract them for the length in days (a `NA` book-out means the person is still in custody):
 
 ```{r detention-length, eval=FALSE}
 detentions_local <- detentions_local |>
@@ -88,41 +98,47 @@ summary(detentions_local$days_held)
 
 ## Where Do People Get Sent?
 
-The `detention_facility_last` column shows where the person was held at the end of their stay (or is currently held). Compare that to the `book_in_aor` to find out-of-state transfers:
+There is no state column in this file. The end-of-stay field is `detention_facility_last`, a facility **name**. For people booked in your area, that name is almost always a local hold room — the out-of-state moves live in their *later* stays. So the cleanest "where did they go" signal is the `book_in_aor` of those later stays:
 
-```{r transfer-analysis, eval=FALSE}
-# What states are people ending up in?
+```{r where-sent, eval=FALSE}
 detentions_local |>
-  count(state_of_detention_facility_last, sort = TRUE) |>
+  filter(book_in_aor != MY_AOR) |>
+  count(book_in_aor, sort = TRUE) |>
   slice_head(n = 10)
 ```
+
+For Maryland this surfaces New Orleans (Louisiana) far ahead of everywhere else, followed by Harlingen, Houston, San Antonio, and El Paso (Texas) — the "far from home" pattern. To see specific facilities instead of regions, swap in `count(detention_facility_last, sort = TRUE)`.
 
 ---
 
 ## Transfer Rate
 
-How many people ended up outside their home AOR?
+A person counts as transferred out of the area if any of their stays was booked in a *different* AOR than yours. Collapse to one row per person first, then summarize:
 
 ```{r transfer-rate, eval=FALSE}
 detentions_local |>
-  mutate(
-    transferred = detention_release_reason == "Transfer" |
-                  (book_in_aor != state_of_detention_facility_last)
+  group_by(unique_identifier) |>
+  summarize(
+    left_area = any(book_in_aor != MY_AOR, na.rm = TRUE),
+    .groups = "drop"
   ) |>
   summarize(
-    total      = n(),
-    transferred = sum(transferred, na.rm = TRUE),
-    pct        = round(transferred / total * 100, 1)
+    people      = n(),
+    transferred = sum(left_area),
+    pct         = round(transferred / people * 100, 1)
   )
 ```
+
+This is a conservative floor: it only catches moves that crossed into another AOR's books. Same-AOR facility changes and people still in their first stay don't count, so the true "moved at least once" share is higher.
 
 ---
 
 ## Key Takeaways
 
-- The detentions data uses `book_in_aor` (not `state`) to identify local cases
-- `difftime()` calculates the number of days between two dates
-- `detention_release_reason == "Transfer"` identifies formal transfers
-- Three out of four Maryland detainees were transferred to Louisiana or Texas in 2025
+- This file is one row per **stay**, not per person; track people with `unique_identifier` or you'll miss every cross-AOR transfer
+- `book_in_aor` identifies the booking area; there is no state field, so out-of-area moves show up as later stays in a different AOR
+- `difftime()` calculates the number of days between book-in and book-out
+- `detention_release_reason == "Transferred"` flags formal transfers (note the exact spelling)
+- Following Maryland detainees this way reproduces the published finding: New Orleans and Texas AORs dominate the destinations
 
-**For per-capita comparison:** If you want to compare transfer rates between states, use the same denominator (detentions per population or detentions per arrest) and note that the `book_in_aor` spans multiple states for some AORs.
+**For per-capita comparison:** If you want to compare transfer rates between states, use the same denominator (detentions per population or detentions per arrest) and note that an AOR can span multiple states.
