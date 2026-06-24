@@ -1,8 +1,4 @@
-# setup.R — installs and verifies the packages this workshop needs.
-#
-# Safe to run as many times as you like. It installs only what's missing,
-# then checks that every package actually loads — so a half-finished
-# install can't slip through and break a lesson later.
+# setup.R: installs only missing packages, then verifies each one loads so partial installs can't slip through; safe to re-run
 
 # Pin a CRAN mirror so R never stops to ask which one to use.
 options(repos = c(CRAN = "https://cloud.r-project.org"))
@@ -10,8 +6,7 @@ options(repos = c(CRAN = "https://cloud.r-project.org"))
 # The convenience meta-packages we install.
 to_install <- c("tidyverse", "readxl", "janitor", "scales", "here")
 
-# The packages the lessons actually load. tidyverse is a bundle, so we
-# check its members individually — that's where partial installs hide.
+# Packages the lessons load; tidyverse members are checked individually since that's where partial installs hide
 to_verify <- c(
   "dplyr", "ggplot2", "readr", "tibble", "tidyr",
   "lubridate", "forcats", "stringr",

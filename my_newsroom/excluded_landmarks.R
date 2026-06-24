@@ -1,9 +1,6 @@
 # ============================================================
 # EXCLUDED LANDMARKS
-# Facilities and codes to remove from facility-level analysis.
-# These are real arrests — they're excluded only from the
-# facility table because they don't map to a specific location.
-# They are still counted in state totals.
+# Codes removed from the facility table only; real arrests with no specific location, still counted in state totals
 # ============================================================
 
 # ICE monitoring programs — not physical detention facilities
@@ -26,9 +23,7 @@ AREA_CODES <- c(
 # Add your area's specific exclusions here:
 # ============================================================
 
-# Out-of-state facilities that appear in your data due to
-# AOR overlap or transfers — look for facility names that
-# clearly belong to another state.
+# Out-of-state facilities that appear due to AOR overlap or transfers; add any that belong to another state
 LOCAL_EXCLUSIONS <- c(
   # Example: "ADELANTO ICE PROCESSING CENTER"  # California, not Maryland
 )
