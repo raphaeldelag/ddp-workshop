@@ -38,3 +38,13 @@ Copy the value exactly — including "Area of Responsibility" — into `my_newsr
 - Some states span multiple AORs. Maryland, for example, has records in both the **Baltimore AOR** and the **Washington AOR** (DC-suburb cases). The `my_newsroom/` template filters by both.
 - The AOR a record falls under is determined by ICE, not by where the person was physically arrested. Use the `state` field as the primary filter and the AOR as a fallback.
 - Puerto Rico and the US Virgin Islands are covered by the Miami AOR.
+
+## Data file: `aor_states.csv`
+
+`reference/aor_states.csv` is the authoritative AOR-to-state lookup used by the
+`my_newsroom/` Data Check. It was derived from the ICE AOR **county** shapefile
+(deportationdata.org / ICE FOIA), aggregating each AOR's counties up to states.
+Because it comes from the official AOR boundaries rather than the arrest data, it
+ignores the stray transfer and data-entry records that make an AOR look like it
+spans far more states than it really does. Columns: `aor_key` (normalized match
+key), `aor_name`, `n_states`, `states`, `n_counties`.

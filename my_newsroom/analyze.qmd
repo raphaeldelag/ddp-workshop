@@ -126,16 +126,27 @@ cat("  blank-state records added via AOR fallback:",
     sum(is.na(arrests_all$state) & arrests_all$toa_current_duty_aor == MY_AOR, na.rm = TRUE),
     "\n\n")
 
-# Whether your AOR mixes in other states
-aor_states <- arrests_all |>
-  filter(toa_current_duty_aor == MY_AOR, !is.na(state)) |>
-  count(state, sort = TRUE)
-if (nrow(aor_states) > 1) {
-  cat("NOTE:", MY_AOR, "spans", nrow(aor_states),
-      "states. A state-anchored mode keeps your count clean; an AOR-only view would mix them.\n")
-  print(aor_states)
-  cat("\n")
+# Which states your AOR actually covers, from the authoritative ICE AOR county
+# shapefile (reference/aor_states.csv) rather than inferred from the messy data.
+aor_lookup <- read_csv(here("reference", "aor_states.csv"), show_col_types = FALSE)
+my_key   <- str_squish(str_to_lower(str_remove_all(str_remove(MY_AOR, "Area of Responsibility"), "\\.")))
+this_aor <- aor_lookup |> filter(aor_key == my_key)
+
+if (nrow(this_aor) == 1) {
+  covered <- str_to_upper(str_trim(unlist(str_split(this_aor$states, ";"))))
+  cat(MY_AOR, "officially covers", this_aor$n_states,
+      if (this_aor$n_states == 1) "state:" else "states:", this_aor$states, "\n")
+  if (!str_to_upper(MY_STATE) %in% covered) {
+    cat("  WARNING: MY_STATE (", MY_STATE, ") is not in this AOR — check your config pairing.\n")
+  }
+  if (this_aor$n_states > 1) {
+    cat("  Multi-state AOR: state_only is safest; state_or_aor / state_and_aor can pull in",
+        paste(setdiff(covered, str_to_upper(MY_STATE)), collapse = ", "), "\n")
+  }
+} else {
+  cat("AOR not found in reference/aor_states.csv; skipping the geography check.\n")
 }
+cat("\n")
 
 # Apprehension methods that fall into the 'Border / Entry' catch-all
 unmapped <- arrests_local |>

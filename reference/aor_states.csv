@@ -1,0 +1,26 @@
+aor_key,aor_name,n_states,states,n_counties
+atlanta,Atlanta,3,Georgia; North Carolina; South Carolina,305
+baltimore,Baltimore,1,Maryland,24
+boston,Boston,6,Connecticut; Maine; Massachusetts; New Hampshire; Rhode Island; Vermont,68
+buffalo,Buffalo,1,New York,48
+chicago,Chicago,6,Illinois; Indiana; Kansas; Kentucky; Missouri; Wisconsin,606
+dallas,Dallas,2,Oklahoma; Texas,205
+denver,Denver,2,Colorado; Wyoming,87
+detroit,Detroit,2,Michigan; Ohio,171
+el paso,El Paso,2,New Mexico; Texas,51
+harlingen,Harlingen,1,Texas,15
+houston,Houston,1,Texas,57
+los angeles,Los Angeles,1,California,7
+miami,Miami,3,Florida; Puerto Rico; United States Virgin Islands,148
+new orleans,New Orleans,5,Alabama; Arkansas; Louisiana; Mississippi; Tennessee,383
+new york city,New York City,1,New York,14
+newark,Newark,1,New Jersey,21
+philadelphia,Philadelphia,3,Delaware; Pennsylvania; West Virginia,125
+phoenix,Phoenix,1,Arizona,15
+salt lake city,Salt Lake City,4,Idaho; Montana; Nevada; Utah,146
+san antonio,San Antonio,1,Texas,36
+san diego,San Diego,1,California,2
+san francisco,San Francisco,4,California; Commonwealth of the Northern Mariana Islands; Guam; Hawaii,59
+seattle,Seattle,3,Alaska; Oregon; Washington,105
+st paul,St Paul,5,Iowa; Minnesota; Nebraska; North Dakota; South Dakota,398
+washington,Washington,2,District of Columbia; Virginia,134
