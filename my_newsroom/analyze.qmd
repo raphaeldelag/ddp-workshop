@@ -123,9 +123,9 @@ arrests_local |>
 ### Same Time Last Year
 
 The most recent administration year is only partial, so comparing its raw
-total to a full prior year would understate it. To compare fairly, we trim
-every administration year to the **same number of days** that have elapsed
-in the current one, measured from each January 20 anniversary.
+total to a full prior year would understate it. To compare fairly, we line up
+the **same calendar window** in every year: from each January 20 inauguration
+anniversary through the latest date the data reaches (early March this year).
 
 ```{r yoy-window}
 # How far into the current administration year does the data reach?
@@ -143,8 +143,8 @@ arrests_same_window <- arrests_local |>
   filter(!is.na(period_start),
          as.integer(apprehension_date - period_start) <= elapsed_days)
 
-cat("Comparing the first", elapsed_days, "days of each administration year",
-    "(through", format(data_through, "%b %d"), ")\n")
+cat("Comparing Jan 20 to", format(data_through, "%b %d"),
+    "in each administration year\n")
 
 arrests_same_window |>
   count(admin_period, .drop = FALSE) |>
@@ -157,18 +157,30 @@ arrests_same_window |>
                              "Change vs. prior year", "% change"))
 ```
 
-```{r type-table}
-arrests_local |>
-  count(arrest_type, sort = TRUE) |>
-  mutate(pct = percent(n / sum(n), accuracy = 0.1)) |>
-  knitr::kable(col.names = c("Arrest Type", "Count", "Share"))
+### Arrest Type, Trump vs. Biden
+
+Same elapsed-day window as above, broken out by administration so the periods
+are directly comparable. This shows whether the *mix* of arrests shifted, not
+just the total.
+
+```{r type-by-period}
+arrests_same_window |>
+  count(admin_period, arrest_type, .drop = FALSE) |>
+  filter(n > 0) |>
+  pivot_wider(names_from = admin_period, values_from = n, values_fill = 0) |>
+  rename(`Arrest Type` = arrest_type) |>
+  knitr::kable()
 ```
 
-```{r criminality-table}
-arrests_local |>
-  count(criminality_label, sort = TRUE) |>
-  mutate(pct = percent(n / sum(n), accuracy = 0.1)) |>
-  knitr::kable(col.names = c("Criminality", "Count", "Share"))
+### Criminality, Trump vs. Biden
+
+```{r criminality-by-period}
+arrests_same_window |>
+  count(admin_period, criminality_label, .drop = FALSE) |>
+  filter(n > 0) |>
+  pivot_wider(names_from = admin_period, values_from = n, values_fill = 0) |>
+  rename(`Criminality` = criminality_label) |>
+  knitr::kable()
 ```
 
 ---
