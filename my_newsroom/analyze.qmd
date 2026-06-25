@@ -167,6 +167,61 @@ if (nrow(small) > 0) {
 
 ---
 
+## At a Glance
+
+A draft lede built automatically from the same-window comparison below. Treat
+it as a starting point to verify against the tables, not finished copy.
+
+```{r at-a-glance, results='asis'}
+# Build the same-window comparison once; the Same Time Last Year table reuses it
+data_through  <- max(arrests_local$apprehension_date, na.rm = TRUE)
+anniversaries <- as.Date(c("2024-01-20", "2025-01-20", "2026-01-20"))
+current_anniv <- max(anniversaries[anniversaries <= data_through])
+elapsed_days  <- as.integer(data_through - current_anniv)
+
+arrests_same_window <- arrests_local |>
+  mutate(
+    anniv_idx    = findInterval(apprehension_date, anniversaries),
+    period_start = if_else(anniv_idx == 0, as.Date(NA), anniversaries[pmax(anniv_idx, 1)])
+  ) |>
+  filter(!is.na(period_start),
+         as.integer(apprehension_date - period_start) <= elapsed_days)
+
+win <- arrests_same_window |> count(admin_period, .drop = FALSE) |> filter(n > 0)
+
+# Draft a lede only when there are at least two comparable windows
+if (nrow(win) >= 2) {
+  latest <- win[nrow(win), ]
+  prior  <- win[nrow(win) - 1, ]
+  pct    <- (latest$n - prior$n) / prior$n * 100
+  dir    <- if (pct >= 0) "up" else "down"
+
+  nc <- arrests_same_window |>
+    filter(criminality_label == "No Criminal Record") |>
+    count(admin_period, .drop = FALSE)
+  nc_val <- function(p) coalesce(nc$n[match(p, as.character(nc$admin_period))], 0L)
+
+  top_type <- arrests_same_window |>
+    filter(admin_period == latest$admin_period) |>
+    count(arrest_type, sort = TRUE) |>
+    slice(1)
+
+  cat(sprintf(
+    paste0("> **At a glance — %s.** ICE logged **%s arrests** between Jan 20 and %s of %s, ",
+           "**%s %s%%** from %s in the same window a year earlier. %s arrests led the window ",
+           "(%s of %s), and arrests of people with no criminal record went from %s to %s.\n"),
+    MY_LABEL, comma(latest$n), format(data_through, "%b %d"), latest$admin_period,
+    dir, round(abs(pct)), comma(prior$n),
+    top_type$arrest_type, comma(top_type$n), comma(latest$n),
+    comma(nc_val(as.character(prior$admin_period))), comma(nc_val(as.character(latest$admin_period)))
+  ))
+} else {
+  cat("> **At a glance.** Not enough comparable time windows in the data to draft a year-over-year lede.\n")
+}
+```
+
+---
+
 ## Summary
 
 Total arrests in each administration year. Note that the first and last
@@ -189,21 +244,7 @@ the **same calendar window** in every year: from each January 20 inauguration
 anniversary through the latest date the data reaches (early March this year).
 
 ```{r yoy-window}
-# How far into the current administration year does the data reach?
-data_through  <- max(arrests_local$apprehension_date, na.rm = TRUE)
-anniversaries <- as.Date(c("2024-01-20", "2025-01-20", "2026-01-20"))
-current_anniv <- max(anniversaries[anniversaries <= data_through])
-elapsed_days  <- as.integer(data_through - current_anniv)
-
-# Flag arrests in the same elapsed-day window of their year; findInterval returns 0 for pre-2024 records, so map those to NA
-arrests_same_window <- arrests_local |>
-  mutate(
-    anniv_idx    = findInterval(apprehension_date, anniversaries),
-    period_start = if_else(anniv_idx == 0, as.Date(NA), anniversaries[pmax(anniv_idx, 1)])
-  ) |>
-  filter(!is.na(period_start),
-         as.integer(apprehension_date - period_start) <= elapsed_days)
-
+# arrests_same_window and data_through are built in the At a Glance chunk above
 cat("Comparing Jan 20 to", format(data_through, "%b %d"),
     "in each administration year\n")
 
