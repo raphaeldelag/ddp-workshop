@@ -41,8 +41,9 @@ arrests_all <- bind_rows(
   load_arrests(ARRESTS_FY24),
   load_arrests(ARRESTS_FY25),
   load_arrests(ARRESTS_FY26)
-) |>
-  distinct()
+)
+n_raw_rows <- nrow(arrests_all)          # before de-duplication, for the Data Check
+arrests_all <- distinct(arrests_all)
 ```
 
 ```{r filter-state}
@@ -102,6 +103,66 @@ arrests_local <- arrests_local |>
     "Trump's first year",
     "Trump's second year (so far)"
   )))
+```
+
+---
+
+## Data Check
+
+Run this before trusting anything below. It surfaces the judgment calls baked
+into your numbers so you can defend them — or catch a problem before it reaches
+print.
+
+```{r data-check}
+# De-duplication across the three fiscal-year files
+cat("Rows loaded:", n_raw_rows, "| after removing duplicates:", nrow(arrests_all),
+    "(", n_raw_rows - nrow(arrests_all), "dropped )\n\n")
+
+# How your filter mode pulled records
+cat("Filter mode:", MY_FILTER_MODE, "selected", nrow(arrests_local), "arrests\n")
+cat("  matched on state ==", MY_STATE, ":",
+    sum(arrests_all$state == MY_STATE, na.rm = TRUE), "\n")
+cat("  blank-state records added via AOR fallback:",
+    sum(is.na(arrests_all$state) & arrests_all$toa_current_duty_aor == MY_AOR, na.rm = TRUE),
+    "\n\n")
+
+# Whether your AOR mixes in other states
+aor_states <- arrests_all |>
+  filter(toa_current_duty_aor == MY_AOR, !is.na(state)) |>
+  count(state, sort = TRUE)
+if (nrow(aor_states) > 1) {
+  cat("NOTE:", MY_AOR, "spans", nrow(aor_states),
+      "states. A state-anchored mode keeps your count clean; an AOR-only view would mix them.\n")
+  print(aor_states)
+  cat("\n")
+}
+
+# Apprehension methods that fall into the 'Border / Entry' catch-all
+unmapped <- arrests_local |>
+  filter(!apprehension_method %in% c(CUSTODIAL_METHODS, AT_LARGE_METHODS)) |>
+  count(apprehension_method, sort = TRUE)
+cat("Methods landing in 'Border / Entry' (", sum(unmapped$n), "rows ) — confirm they belong:\n")
+if (nrow(unmapped) > 0) print(unmapped) else cat("  none\n")
+cat("\n")
+
+# Date coverage and partial-window flag
+cat("Date range:", format(min(arrests_local$apprehension_date, na.rm = TRUE)),
+    "to", format(max(arrests_local$apprehension_date, na.rm = TRUE)), "\n")
+if (END_DATE > max(arrests_local$apprehension_date, na.rm = TRUE)) {
+  cat("  END_DATE is past the data, so the most recent period is data-limited, not calendar-limited.\n")
+}
+
+# Small-base guard for the period breakdowns below
+small <- bind_rows(
+  arrests_local |> count(admin_period, arrest_type) |> rename(category = arrest_type),
+  arrests_local |> count(admin_period, criminality_label) |> rename(category = criminality_label)
+) |>
+  filter(n > 0, n < 10)
+if (nrow(small) > 0) {
+  cat("\nSMALL-SAMPLE WARNING: these breakdown cells have fewer than 10 arrests.\n")
+  cat("Don't lead with a percentage calculated off them:\n")
+  print(small)
+}
 ```
 
 ---
