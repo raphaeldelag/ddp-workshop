@@ -10,8 +10,6 @@ MY_LABEL  <- "Maryland"                            # used in chart titles and ca
 # How to combine the state and AOR filters (see SAVED JURISDICTIONS below)
 MY_FILTER_MODE <- "state_or_aor"                   # state_only, state_or_aor, or state_and_aor
 
-SUBJURIS_LABEL <- NULL                            # optional landmark sub-jurisdiction breakout; NYC enables it via nyc_landmarks.R
-
 START_DATE <- as.Date("2025-01-20")               # inauguration day, comparison anchor
 END_DATE   <- Sys.Date()                          # or set a specific date: as.Date("2026-03-10")
 
@@ -25,8 +23,6 @@ END_DATE   <- Sys.Date()                          # or set a specific date: as.D
 
 # New York City, NYC AOR within New York only so NJ/CT records in that AOR are excluded
 #   MY_STATE <- "NEW YORK"; MY_AOR <- "New York City Area of Responsibility"; MY_LABEL <- "New York City"; MY_FILTER_MODE <- "state_and_aor"
-#   For a five-boroughs landmark breakout, also uncomment the next line:
- source(here::here("my_newsroom", "nyc_landmarks.R"))
 
 # Arizona, Phoenix AOR covers only Arizona so the AOR fallback is safe
 #   MY_STATE <- "ARIZONA"; MY_AOR <- "Phoenix Area of Responsibility"; MY_LABEL <- "Arizona"; MY_FILTER_MODE <- "state_or_aor"

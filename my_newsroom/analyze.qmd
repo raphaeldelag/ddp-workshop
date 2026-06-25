@@ -185,30 +185,6 @@ arrests_same_window |>
 
 ---
 
-## Sub-Jurisdiction Breakout
-
-This table only appears when a landmark sub-jurisdiction is configured (see `nyc_landmarks.R`). It classifies arrests by the `apprehension_site_landmark` field. The landmark is reliable for custodial arrests (a named facility) but not for at-large arrests, where it usually reflects the ICE office or operation, so read the at-large column as a floor and the unplaceable rows as genuinely unknown.
-
-```{r subjuris, eval=exists("NYC_FACILITY_PATTERNS")}
-inc <- paste(NYC_FACILITY_PATTERNS, collapse = "|")
-exc <- paste(NON_NYC_PATTERNS, collapse = "|")
-
-arrests_local |>
-  mutate(
-    lm = replace_na(apprehension_site_landmark, ""),
-    sub_class = case_when(
-      str_detect(lm, inc) ~ paste("In", SUBJURIS_LABEL),
-      str_detect(lm, exc) ~ paste("Outside", SUBJURIS_LABEL),
-      TRUE                ~ "Unplaceable by landmark"
-    )
-  ) |>
-  count(arrest_type, sub_class) |>
-  pivot_wider(names_from = arrest_type, values_from = n, values_fill = 0) |>
-  knitr::kable()
-```
-
----
-
 ## Monthly Trend
 
 ```{r monthly-trend}
@@ -234,7 +210,7 @@ ggplot(monthly, aes(x = month, y = n)) +
     title    = paste("ICE Arrests in", MY_LABEL, "by Month"),
     subtitle = "FY2024–FY2026",
     x = NULL, y = "Arrests",
-    caption  = "Source: DHS via Deportation Data Project (FOIA)"
+    caption  = "Source: ICE via Deportation Data Project (FOIA)"
   ) +
   theme_minimal()
 ```
@@ -261,7 +237,7 @@ ggplot(monthly_type, aes(x = month, y = n, fill = arrest_type)) +
     title    = paste("ICE Arrests in", MY_LABEL, "by Type"),
     subtitle = "Dashed line = inauguration",
     x = NULL, y = "Arrests", fill = NULL,
-    caption  = "Source: DHS via Deportation Data Project (FOIA)"
+    caption  = "Source: ICE via Deportation Data Project (FOIA)"
   ) +
   theme_minimal() +
   theme(legend.position = "bottom")
