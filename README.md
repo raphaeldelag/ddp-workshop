@@ -85,6 +85,16 @@ CENSUS_API_KEY=your_key_here
 
 Keep your key out of your scripts and out of git — `~/.Renviron` is the right place for it.
 
+**How the fallback works:** the `compare-national` chunk in `analyze.qmd` tries
+`tidycensus` first, and on any failure (no key, no package, offline, or an API
+error) it silently reads `reference/state_population.csv` instead. That file is
+the Census Bureau's 2024 state population estimates (Population Estimates
+Program, `NST-EST2024`, downloaded from
+[census.gov/programs-surveys/popest](https://www2.census.gov/programs-surveys/popest/datasets/2020-2024/state/totals/),
+filtered to states and uppercased to match the arrest data). So per-capita
+numbers always render; with a key they reflect live ACS 5-year estimates, and
+without one they use the bundled 2024 figures (the two differ by under 2%).
+
 ---
 
 ## About the Data
