@@ -162,6 +162,10 @@ cat("Date range:", format(min(arrests_local$apprehension_date, na.rm = TRUE)),
 if (END_DATE > max(arrests_local$apprehension_date, na.rm = TRUE)) {
   cat("  END_DATE is past the data, so the most recent period is data-limited, not calendar-limited.\n")
 }
+n_future <- sum(arrests_all$apprehension_date > Sys.Date(), na.rm = TRUE)
+if (n_future > 0) {
+  cat("  ", n_future, "record(s) are dated in the future (data-entry errors); excluded by the END_DATE filter.\n")
+}
 
 # Small-base guard for the period breakdowns below
 small <- bind_rows(
@@ -293,6 +297,71 @@ arrests_same_window |>
   filter(n > 0) |>
   pivot_wider(names_from = admin_period, values_from = n, values_fill = 0) |>
   rename(`Criminality` = criminality_label) |>
+  knitr::kable()
+```
+
+---
+
+## How Does This Compare?
+
+A local number means more against a baseline. This ranks your state by arrests
+per 100,000 residents (2024 Census estimates) and sets your year-over-year
+change beside the national one.
+
+```{r compare-national, results='asis'}
+# state_population.csv: 2024 Census state population estimates (NST-EST2024)
+pop <- read_csv(here("reference", "state_population.csv"), show_col_types = FALSE)
+
+# National same-window totals by year, reusing anniversaries + elapsed_days from At a Glance
+natl <- arrests_all |>
+  mutate(idx = findInterval(apprehension_date, anniversaries),
+         ps  = if_else(idx == 0, as.Date(NA), anniversaries[pmax(idx, 1)])) |>
+  filter(!is.na(ps), as.integer(apprehension_date - ps) <= elapsed_days) |>
+  mutate(window_year = year(ps))
+
+natl_by   <- natl |> count(window_year)
+latest_yr <- max(natl_by$window_year)
+np <- natl_by$n[natl_by$window_year == latest_yr - 1]
+nl <- natl_by$n[natl_by$window_year == latest_yr]
+natl_pct <- (nl - np) / np * 100
+
+# Local same-window year-over-year, from arrests_same_window built in At a Glance
+loc_by <- arrests_same_window |> mutate(window_year = year(period_start)) |> count(window_year)
+lp <- loc_by$n[loc_by$window_year == latest_yr - 1]
+ll <- loc_by$n[loc_by$window_year == latest_yr]
+loc_pct <- if (length(lp) && lp > 0) (ll - lp) / lp * 100 else NA
+
+# Per-capita ranking for the latest window
+per_state <- natl |>
+  filter(window_year == latest_yr, !is.na(state)) |>
+  count(state) |>
+  inner_join(pop, by = "state") |>
+  mutate(per100k = n / population * 1e5) |>
+  arrange(desc(per100k)) |>
+  mutate(rank = row_number())
+me <- per_state |> filter(state == MY_STATE)
+
+if (nrow(me) == 1) {
+  cat(sprintf(
+    paste0("> **How %s compares.** In the Jan 20-%s window, %s logged **%.1f arrests per 100,000 ",
+           "residents**, ranking **#%d of %d** states. %s's same-window arrests were %s%s, against ",
+           "a national change of %s%.0f%% over the same period.\n"),
+    str_to_title(MY_STATE), format(data_through, "%b %d"), str_to_title(MY_STATE), me$per100k,
+    me$rank, nrow(per_state), MY_LABEL,
+    if (is.na(loc_pct)) "" else if (loc_pct >= 0) "up " else "down ",
+    if (is.na(loc_pct)) "not comparable" else paste0(round(abs(loc_pct)), "%"),
+    if (natl_pct >= 0) "up " else "down ", abs(natl_pct)))
+  cat("\n*Per-capita ranking naturally favors smaller and border states, so read it alongside the raw counts. All figures cover the broad DDP arrests universe, not custodial arrests only.*\n")
+} else {
+  cat("> **How it compares.** No 2024 population match for MY_STATE, so the per-capita ranking is unavailable.\n")
+}
+```
+
+```{r compare-table}
+per_state |>
+  transmute(Rank = rank, State = str_to_title(state),
+            `Per 100k` = round(per100k, 1), Arrests = comma(n)) |>
+  filter(Rank <= 5 | State == str_to_title(MY_STATE)) |>
   knitr::kable()
 ```
 
