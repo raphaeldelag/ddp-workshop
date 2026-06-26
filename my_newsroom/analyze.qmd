@@ -305,12 +305,23 @@ arrests_same_window |>
 ## How Does This Compare?
 
 A local number means more against a baseline. This ranks your state by arrests
-per 100,000 residents (2024 Census estimates) and sets your year-over-year
-change beside the national one.
+per 100,000 residents (live Census ACS via tidycensus when a key is set, bundled
+2024 estimates otherwise) and sets your year-over-year change beside the national one.
 
 ```{r compare-national, results='asis'}
-# state_population.csv: 2024 Census state population estimates (NST-EST2024)
-pop <- read_csv(here("reference", "state_population.csv"), show_col_types = FALSE)
+# Population for per-capita rates. With a free Census API key set (see the
+# README, "Census API key"), this pulls live ACS estimates via tidycensus.
+# Without a key, offline, or if the call fails, it falls back to the bundled
+# 2024 estimates in reference/state_population.csv so the report still knits.
+pop <- tryCatch({
+  stopifnot(requireNamespace("tidycensus", quietly = TRUE),
+            nzchar(Sys.getenv("CENSUS_API_KEY")))
+  tidycensus::get_acs(geography = "state", variables = "B01003_001",
+                      year = 2023, survey = "acs5") |>
+    transmute(state = str_to_upper(NAME), population = estimate)
+}, error = function(e) {
+  read_csv(here("reference", "state_population.csv"), show_col_types = FALSE)
+})
 
 # National same-window totals by year, reusing anniversaries + elapsed_days from At a Glance
 natl <- arrests_all |>

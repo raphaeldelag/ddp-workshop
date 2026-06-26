@@ -60,6 +60,31 @@ The `my_newsroom/` folder is a template you can use back at your newsroom:
 
 See `reference/aor_reference.md` for a list of all 25 ICE Areas of Responsibility.
 
+### Census API key (optional, for the per-capita comparison)
+
+The "How Does This Compare?" section ranks your state by arrests per 100,000
+residents. With a free Census API key it pulls live population data via
+`tidycensus`; without one it falls back to bundled 2024 estimates, so the report
+still knits either way.
+
+To use live data:
+
+1. Install the package: `install.packages("tidycensus")`
+2. Request a free key (takes a minute): [api.census.gov/data/key_signup.html](https://api.census.gov/data/key_signup.html)
+3. Store it so R can find it — easiest, run once in R:
+   ```r
+   tidycensus::census_api_key("YOUR_KEY_HERE", install = TRUE)
+   ```
+   then restart R. This writes `CENSUS_API_KEY` to your `~/.Renviron`.
+
+**Already have a key elsewhere?** Add this one line to `~/.Renviron` and restart R:
+
+```
+CENSUS_API_KEY=your_key_here
+```
+
+Keep your key out of your scripts and out of git — `~/.Renviron` is the right place for it.
+
 ---
 
 ## About the Data
