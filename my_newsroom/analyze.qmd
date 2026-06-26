@@ -148,6 +148,20 @@ if (nrow(this_aor) == 1) {
 }
 cat("\n")
 
+# Whether your state is split across several AORs. If so, a state-wide filter
+# lumps separate metro regions together (e.g. New York State = NYC + Buffalo),
+# which surprises reporters expecting just one city.
+state_aors <- aor_lookup |>
+  filter(map_lgl(states, ~ str_to_upper(MY_STATE) %in%
+                   str_to_upper(str_trim(unlist(str_split(.x, ";")))))) |>
+  pull(aor_name)
+if (length(state_aors) > 1 && MY_FILTER_MODE != "state_and_aor") {
+  cat("NOTE:", str_to_title(MY_STATE), "is split across", length(state_aors),
+      "ICE AORs:", paste(state_aors, collapse = ", "), "\n")
+  cat("  Mode", MY_FILTER_MODE, "includes all of them. To isolate one metro area",
+      "(e.g. New York City, not Buffalo/upstate), set MY_FILTER_MODE = 'state_and_aor' and pick one AOR.\n\n")
+}
+
 # Apprehension methods that fall into the 'Border / Entry' catch-all
 unmapped <- arrests_local |>
   filter(!apprehension_method %in% c(CUSTODIAL_METHODS, AT_LARGE_METHODS)) |>
@@ -354,15 +368,21 @@ me <- per_state |> filter(state == MY_STATE)
 
 if (nrow(me) == 1) {
   cat(sprintf(
-    paste0("> **How %s compares.** In the Jan 20-%s window, %s logged **%.1f arrests per 100,000 ",
-           "residents**, ranking **#%d of %d** states. %s's same-window arrests were %s%s, against ",
-           "a national change of %s%.0f%% over the same period.\n"),
-    str_to_title(MY_STATE), format(data_through, "%b %d"), str_to_title(MY_STATE), me$per100k,
+    paste0("> **How %s compares.** Statewide, %s logged **%.1f arrests per 100,000 residents** ",
+           "in the Jan 20-%s window, ranking **#%d of %d** states. %s's same-window arrests were ",
+           "%s%s, against a national change of %s%.0f%% over the same period.\n"),
+    MY_LABEL, str_to_title(MY_STATE), me$per100k, format(data_through, "%b %d"),
     me$rank, nrow(per_state), MY_LABEL,
     if (is.na(loc_pct)) "" else if (loc_pct >= 0) "up " else "down ",
     if (is.na(loc_pct)) "not comparable" else paste0(round(abs(loc_pct)), "%"),
     if (natl_pct >= 0) "up " else "down ", abs(natl_pct)))
-  cat("\n*Per-capita ranking naturally favors smaller and border states, so read it alongside the raw counts. All figures cover the broad DDP arrests universe, not custodial arrests only.*\n")
+  if (MY_FILTER_MODE == "state_and_aor") {
+    cat(sprintf(paste0("\n*Per-capita rank is statewide (%s) since population is only available by state; ",
+                       "your tables above cover only the %s within it. The year-over-year figure is for %s.*\n"),
+                str_to_title(MY_STATE), MY_AOR, MY_LABEL))
+  } else {
+    cat("\n*Per-capita ranking naturally favors smaller and border states, so read it alongside the raw counts. All figures cover the broad DDP arrests universe, not custodial arrests only.*\n")
+  }
 } else {
   cat("> **How it compares.** No 2024 population match for MY_STATE, so the per-capita ranking is unavailable.\n")
 }
