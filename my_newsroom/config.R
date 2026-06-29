@@ -3,9 +3,9 @@
 # Change the values below. Everything else runs automatically.
 # ============================================================
 
-MY_STATE  <- "MARYLAND"                           # ALL CAPS, as it appears in the data
-MY_AOR    <- "Baltimore Area of Responsibility"   # see reference/aor_reference.md
-MY_LABEL  <- "Maryland"                            # used in chart titles and captions
+MY_STATE <- "MARYLAND"                           # ALL CAPS, as it appears in the data
+MY_AOR <- "Baltimore Area of Responsibility"     # see reference/aor_reference.md
+MY_LABEL <- "Maryland"                            # used in chart titles and captions
 
 # How to combine the state and AOR filters (see SAVED JURISDICTIONS below)
 MY_FILTER_MODE <- "state_or_aor"                   # state_only, state_or_aor, or state_and_aor
