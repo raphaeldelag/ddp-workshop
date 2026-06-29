@@ -76,6 +76,19 @@ AT_LARGE_METHODS <- c(
   "Other efforts", "Other Task Force", "Worksite Enforcement", "Patrol Interior"
 )
 
+# Full administration years, split on the Jan 20 inauguration date. Defined once
+# here so the same boundaries drive every table, including the national figures.
+ADMIN_LEVELS <- c("Biden, late 2023 (partial)", "Biden's last year",
+                  "Trump's first year", "Trump's second year (so far)")
+assign_admin_period <- function(d) {
+  factor(case_when(
+    d >= as.Date("2026-01-20") ~ "Trump's second year (so far)",
+    d >= as.Date("2025-01-20") ~ "Trump's first year",
+    d >= as.Date("2024-01-20") ~ "Biden's last year",
+    TRUE                       ~ "Biden, late 2023 (partial)"
+  ), levels = ADMIN_LEVELS)
+}
+
 arrests_local <- arrests_local |>
   mutate(
     arrest_type = case_when(
@@ -89,20 +102,8 @@ arrests_local <- arrests_local |>
       apprehension_criminality == "3 Other Immigration Violator" ~ "No Criminal Record",
       TRUE ~ "Unknown"
     ),
-    # Administration years anchored on the Jan 20 inauguration anniversary; most-recent first
-    admin_period = case_when(
-      apprehension_date >= as.Date("2026-01-20") ~ "Trump's second year (so far)",
-      apprehension_date >= as.Date("2025-01-20") ~ "Trump's first year",
-      apprehension_date >= as.Date("2024-01-20") ~ "Biden's last year",
-      TRUE                                       ~ "Biden, late 2023 (partial)"
-    )
-  ) |>
-  mutate(admin_period = factor(admin_period, levels = c(
-    "Biden, late 2023 (partial)",
-    "Biden's last year",
-    "Trump's first year",
-    "Trump's second year (so far)"
-  )))
+    admin_period = assign_admin_period(apprehension_date)
+  )
 ```
 
 ---
@@ -198,54 +199,61 @@ if (nrow(small) > 0) {
 
 ## At a Glance
 
-A draft lede built automatically from the same-window comparison below. Treat
-it as a starting point to verify against the tables, not finished copy.
+A draft lede built automatically from the administration-year comparison below.
+Treat it as a starting point to verify against the tables, not finished copy.
 
 ```{r at-a-glance, results='asis'}
-# Build the same-window comparison once; the Same Time Last Year table reuses it
-data_through  <- max(arrests_local$apprehension_date, na.rm = TRUE)
-anniversaries <- as.Date(c("2024-01-20", "2025-01-20", "2026-01-20"))
-current_anniv <- max(anniversaries[anniversaries <= data_through])
-elapsed_days  <- as.integer(data_through - current_anniv)
+# Full administration-year totals, each flagged complete or partial. The data
+# starts in Oct 2023 and the current year is ongoing, so the first and last
+# buckets are partial; year-over-year change is only meaningful between two
+# complete years. Built once here and reused by the Summary table.
+data_min <- min(arrests_local$apprehension_date, na.rm = TRUE)
+data_max <- max(arrests_local$apprehension_date, na.rm = TRUE)
+period_info <- tibble(
+  admin_period = factor(ADMIN_LEVELS, levels = ADMIN_LEVELS),
+  start = as.Date(c(NA, "2024-01-20", "2025-01-20", "2026-01-20")),
+  end   = as.Date(c("2024-01-19", "2025-01-19", "2026-01-19", "2027-01-19"))
+) |>
+  mutate(complete = !is.na(start) & start >= data_min & end <= data_max)
 
-arrests_same_window <- arrests_local |>
+admin_summary <- arrests_local |>
+  count(admin_period, .drop = FALSE) |>
+  left_join(period_info |> select(admin_period, complete), by = "admin_period") |>
   mutate(
-    anniv_idx    = findInterval(apprehension_date, anniversaries),
-    period_start = if_else(anniv_idx == 0, as.Date(NA), anniversaries[pmax(anniv_idx, 1)])
-  ) |>
-  filter(!is.na(period_start),
-         as.integer(apprehension_date - period_start) <= elapsed_days)
+    share    = n / sum(n),
+    valid    = complete & lag(complete),
+    vs_prior = if_else(valid, n - lag(n), NA_integer_),
+    pct      = if_else(valid, (n - lag(n)) / lag(n), NA_real_)
+  )
 
-win <- arrests_same_window |> count(admin_period, .drop = FALSE) |> filter(n > 0)
+complete_years <- admin_summary |> filter(complete)
+if (nrow(complete_years) >= 2) {
+  latest <- complete_years[nrow(complete_years), ]
+  prior  <- complete_years[nrow(complete_years) - 1, ]
+  pctc   <- (latest$n - prior$n) / prior$n * 100
+  dir    <- if (pctc >= 0) "rose" else "fell"
 
-# Draft a lede only when there are at least two comparable windows
-if (nrow(win) >= 2) {
-  latest <- win[nrow(win), ]
-  prior  <- win[nrow(win) - 1, ]
-  pct    <- (latest$n - prior$n) / prior$n * 100
-  dir    <- if (pct >= 0) "up" else "down"
-
-  nc <- arrests_same_window |>
-    filter(criminality_label == "No Criminal Record") |>
+  nc <- arrests_local |> filter(criminality_label == "No Criminal Record") |>
     count(admin_period, .drop = FALSE)
   nc_val <- function(p) coalesce(nc$n[match(p, as.character(nc$admin_period))], 0L)
+  top_type <- arrests_local |> filter(admin_period == latest$admin_period) |>
+    count(arrest_type, sort = TRUE) |> slice(1)
 
-  top_type <- arrests_same_window |>
-    filter(admin_period == latest$admin_period) |>
-    count(arrest_type, sort = TRUE) |>
-    slice(1)
+  partial <- admin_summary |> filter(admin_period == "Trump's second year (so far)")
+  partial_txt <- if (nrow(partial) == 1 && partial$n > 0)
+    sprintf(" %s arrests have been logged so far in Trump's second year.", comma(partial$n)) else ""
 
   cat(sprintf(
-    paste0("> **At a glance — %s.** ICE logged **%s arrests** between Jan 20 and %s of %s, ",
-           "**%s %s%%** from %s in the same window a year earlier. %s arrests led the window ",
-           "(%s of %s), and arrests of people with no criminal record went from %s to %s.\n"),
-    MY_LABEL, comma(latest$n), format(data_through, "%b %d"), latest$admin_period,
-    dir, round(abs(pct)), comma(prior$n),
+    paste0("> **At a glance — %s.** ICE arrests in %s **%s %s%%** between %s (%s) and %s (%s). ",
+           "%s arrests led the most recent full year (%s of %s), and arrests of people with no ",
+           "criminal record went from %s to %s.%s\n"),
+    MY_LABEL, MY_LABEL, dir, round(abs(pctc)),
+    prior$admin_period, comma(prior$n), latest$admin_period, comma(latest$n),
     top_type$arrest_type, comma(top_type$n), comma(latest$n),
-    comma(nc_val(as.character(prior$admin_period))), comma(nc_val(as.character(latest$admin_period)))
-  ))
+    comma(nc_val(as.character(prior$admin_period))), comma(nc_val(as.character(latest$admin_period))),
+    partial_txt))
 } else {
-  cat("> **At a glance.** Not enough comparable time windows in the data to draft a year-over-year lede.\n")
+  cat("> **At a glance.** Not enough complete administration years in the data to draft a year-over-year lede.\n")
 }
 ```
 
@@ -253,49 +261,30 @@ if (nrow(win) >= 2) {
 
 ## Summary
 
-Total arrests in each administration year. Note that the first and last
-periods are partial windows (the data starts in October 2023 and ends
-partway through Trump's second year), so compare the two full years to
-each other, or use the "same time last year" table below.
+Arrests by administration year (Jan 20 to Jan 19 of the following year). The
+first and last periods are partial — the data starts in October 2023 and the
+current year is ongoing — so the year-over-year change is shown only between the
+two complete years.
 
 ```{r summary-table}
-arrests_local |>
-  count(admin_period, .drop = FALSE) |>
-  mutate(pct = percent(n / sum(n), accuracy = 0.1)) |>
-  knitr::kable(col.names = c("Administration period", "Arrests", "Share"))
-```
-
-### Same Time Last Year
-
-The most recent administration year is only partial, so comparing its raw
-total to a full prior year would understate it. To compare fairly, we line up
-the **same calendar window** in every year: from each January 20 inauguration
-anniversary through the latest date the data reaches (early March this year).
-
-```{r yoy-window}
-# arrests_same_window and data_through are built in the At a Glance chunk above
-cat("Comparing Jan 20 to", format(data_through, "%b %d"),
-    "in each administration year\n")
-
-arrests_same_window |>
-  count(admin_period, .drop = FALSE) |>
-  filter(n > 0) |>
-  mutate(
-    vs_prior = n - lag(n),
-    pct_change = percent((n - lag(n)) / lag(n), accuracy = 0.1)
+admin_summary |>
+  transmute(
+    `Administration period`  = admin_period,
+    Arrests                  = comma(n),
+    Share                    = percent(share, accuracy = 0.1),
+    `Change vs. prior year`  = if_else(is.na(vs_prior), "—", comma(vs_prior)),
+    `% change`               = if_else(is.na(pct), "—", percent(pct, accuracy = 0.1))
   ) |>
-  knitr::kable(col.names = c("Administration period", "Arrests (same window)",
-                             "Change vs. prior year", "% change"))
+  knitr::kable(align = c("l", "r", "r", "r", "r"))
 ```
 
-### Arrest Type, Trump vs. Biden
+### Arrest Type by Administration Year
 
-Same elapsed-day window as above, broken out by administration so the periods
-are directly comparable. This shows whether the *mix* of arrests shifted, not
-just the total.
+Each administration year as a column (the first and last are partial). This shows
+whether the *mix* of arrests shifted, not just the total.
 
 ```{r type-by-period}
-arrests_same_window |>
+arrests_local |>
   count(admin_period, arrest_type, .drop = FALSE) |>
   filter(n > 0) |>
   pivot_wider(names_from = admin_period, values_from = n, values_fill = 0) |>
@@ -303,10 +292,10 @@ arrests_same_window |>
   knitr::kable()
 ```
 
-### Criminality, Trump vs. Biden
+### Criminality by Administration Year
 
 ```{r criminality-by-period}
-arrests_same_window |>
+arrests_local |>
   count(admin_period, criminality_label, .drop = FALSE) |>
   filter(n > 0) |>
   pivot_wider(names_from = admin_period, values_from = n, values_fill = 0) |>
@@ -319,8 +308,9 @@ arrests_same_window |>
 ## How Does This Compare?
 
 A local number means more against a baseline. This ranks your state by arrests
-per 100,000 residents (live Census ACS via tidycensus when a key is set, bundled
-2024 estimates otherwise) and sets your year-over-year change beside the national one.
+per 100,000 residents in the most recent complete administration year (live Census
+ACS via tidycensus when a key is set, bundled 2024 estimates otherwise) and sets
+your year-over-year change beside the national one.
 
 ```{r compare-national, results='asis'}
 # Population for per-capita rates. With a free Census API key set (see the
@@ -337,28 +327,21 @@ pop <- tryCatch({
   read_csv(here("reference", "state_population.csv"), show_col_types = FALSE)
 })
 
-# National same-window totals by year, reusing anniversaries + elapsed_days from At a Glance
-natl <- arrests_all |>
-  mutate(idx = findInterval(apprehension_date, anniversaries),
-         ps  = if_else(idx == 0, as.Date(NA), anniversaries[pmax(idx, 1)])) |>
-  filter(!is.na(ps), as.integer(apprehension_date - ps) <= elapsed_days) |>
-  mutate(window_year = year(ps))
+# The two most recent complete administration years drive the comparison.
+cy <- admin_summary |> filter(complete)
+latest_lab <- as.character(cy$admin_period[nrow(cy)])
+prior_lab  <- as.character(cy$admin_period[nrow(cy) - 1])
+loc_pct <- (cy$n[nrow(cy)] - cy$n[nrow(cy) - 1]) / cy$n[nrow(cy) - 1] * 100
 
-natl_by   <- natl |> count(window_year)
-latest_yr <- max(natl_by$window_year)
-np <- natl_by$n[natl_by$window_year == latest_yr - 1]
-nl <- natl_by$n[natl_by$window_year == latest_yr]
-natl_pct <- (nl - np) / np * 100
+# National totals on the same full administration-year basis.
+natl    <- arrests_all |> mutate(admin_period = assign_admin_period(apprehension_date))
+natl_by <- natl |> count(admin_period, .drop = FALSE)
+nlv      <- function(p) natl_by$n[match(p, as.character(natl_by$admin_period))]
+natl_pct <- (nlv(latest_lab) - nlv(prior_lab)) / nlv(prior_lab) * 100
 
-# Local same-window year-over-year, from arrests_same_window built in At a Glance
-loc_by <- arrests_same_window |> mutate(window_year = year(period_start)) |> count(window_year)
-lp <- loc_by$n[loc_by$window_year == latest_yr - 1]
-ll <- loc_by$n[loc_by$window_year == latest_yr]
-loc_pct <- if (length(lp) && lp > 0) (ll - lp) / lp * 100 else NA
-
-# Per-capita ranking for the latest window
+# Per-capita ranking for the most recent complete year (a full 12-month rate).
 per_state <- natl |>
-  filter(window_year == latest_yr, !is.na(state)) |>
+  filter(admin_period == latest_lab, !is.na(state)) |>
   count(state) |>
   inner_join(pop, by = "state") |>
   mutate(per100k = n / population * 1e5) |>
@@ -366,15 +349,13 @@ per_state <- natl |>
   mutate(rank = row_number())
 me <- per_state |> filter(state == MY_STATE)
 
-if (nrow(me) == 1) {
+if (nrow(cy) >= 2 && nrow(me) == 1) {
   cat(sprintf(
-    paste0("> **How %s compares.** Statewide, %s logged **%.1f arrests per 100,000 residents** ",
-           "in the Jan 20-%s window, ranking **#%d of %d** states. %s's same-window arrests were ",
-           "%s%s, against a national change of %s%.0f%% over the same period.\n"),
-    MY_LABEL, str_to_title(MY_STATE), me$per100k, format(data_through, "%b %d"),
-    me$rank, nrow(per_state), MY_LABEL,
-    if (is.na(loc_pct)) "" else if (loc_pct >= 0) "up " else "down ",
-    if (is.na(loc_pct)) "not comparable" else paste0(round(abs(loc_pct)), "%"),
+    paste0("> **How %s compares.** In %s (the most recent complete administration year), %s logged ",
+           "**%.1f arrests per 100,000 residents** statewide, ranking **#%d of %d** states. %s's arrests ",
+           "%s **%.0f%%** from %s, against a national change of %s%.0f%%.\n"),
+    MY_LABEL, latest_lab, str_to_title(MY_STATE), me$per100k, me$rank, nrow(per_state),
+    MY_LABEL, if (loc_pct >= 0) "rose" else "fell", abs(loc_pct), prior_lab,
     if (natl_pct >= 0) "up " else "down ", abs(natl_pct)))
   if (MY_FILTER_MODE == "state_and_aor") {
     cat(sprintf(paste0("\n*Per-capita rank is statewide (%s) since population is only available by state; ",
@@ -384,7 +365,7 @@ if (nrow(me) == 1) {
     cat("\n*Per-capita ranking naturally favors smaller and border states, so read it alongside the raw counts. All figures cover the broad DDP arrests universe, not custodial arrests only.*\n")
   }
 } else {
-  cat("> **How it compares.** No 2024 population match for MY_STATE, so the per-capita ranking is unavailable.\n")
+  cat("> **How it compares.** Not enough complete years or no population match, so the comparison is unavailable.\n")
 }
 ```
 
